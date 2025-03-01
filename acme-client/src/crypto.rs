@@ -5,7 +5,7 @@ pub enum SupportedKey {
     EcP256,
     EcP256k1,
     EcP384,
-    EcP512
+    EcP521
 }
 
 pub enum SupportedHash {
