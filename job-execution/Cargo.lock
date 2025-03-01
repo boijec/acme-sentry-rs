@@ -3,12 +3,5 @@
 version = 4
 
 [[package]]
-name = "acme-sentry-rs"
-version = "0.1.0"
-dependencies = [
- "job-execution",
-]
-
-[[package]]
 name = "job-execution"
 version = "0.1.0"
