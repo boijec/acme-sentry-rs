@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 job-execution = { path = "./job-execution" }
+acme-client = { path = "./acme-client" }

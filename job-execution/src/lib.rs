@@ -1,5 +1,7 @@
 use std::sync::{mpsc::{Receiver, Sender}, Mutex};
 
+/// The job trait should be implemented for all jobs that
+/// should be runnable in the job queue.
 pub trait Job {
     fn execute(&mut self);
     fn get_result(&self) -> String;
