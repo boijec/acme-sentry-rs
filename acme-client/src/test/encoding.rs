@@ -1,19 +1,19 @@
-use crate::encoding::{b64_decode, b64_encode};
+use crate::encoding::{decode_b64, encode_b64};
     
 #[test]
 fn test_b64_encoding() {
-    assert_eq!(b64_encode(b""),"");
-    assert_eq!(b64_encode(b"f"),"Zg");
-    assert_eq!(b64_encode(b"fo"),"Zm8");
-    assert_eq!(b64_encode(b"foo"),"Zm9v");
+    assert_eq!(encode_b64(b""),"");
+    assert_eq!(encode_b64(b"f"),"Zg");
+    assert_eq!(encode_b64(b"fo"),"Zm8");
+    assert_eq!(encode_b64(b"foo"),"Zm9v");
 }
 
 #[test]
 fn test_b64_decoding() {
-    let mut res = b64_decode("Zg").unwrap();
+    let mut res = decode_b64("Zg").unwrap();
     assert_eq!(String::from_utf8(res).unwrap(),"f");
-    res = b64_decode("Zm8").unwrap();
+    res = decode_b64("Zm8").unwrap();
     assert_eq!(String::from_utf8(res).unwrap(),"fo");
-    res = b64_decode("Zm9v").unwrap();
+    res = decode_b64("Zm9v").unwrap();
     assert_eq!(String::from_utf8(res).unwrap(),"foo");
 }

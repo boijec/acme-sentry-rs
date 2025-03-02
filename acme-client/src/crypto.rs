@@ -23,6 +23,14 @@ impl SupportedKey {
         }
     }
 
+    pub fn get_kty(&self) -> &str {
+        match self {
+            SupportedKey::Rsa2048 | SupportedKey::Rsa4096 => "RSA",
+            SupportedKey::EcP256 | SupportedKey::EcP384 | SupportedKey::EcP521 => "EC",
+            SupportedKey::Ed25519 => "OKP",
+        }
+    }
+
     pub fn get_nid(&self) -> Nid {
         match self {
             SupportedKey::Rsa2048 | SupportedKey::Rsa4096 => Nid::RSA,
@@ -40,6 +48,18 @@ pub enum SupportedAlgorithm {
     ES384,
     ES512,
     EdDSA,
+}
+
+impl SupportedAlgorithm {
+    pub fn to_string(&self) -> &str {
+        match self {
+            SupportedAlgorithm::RS256 => "RS256",
+            SupportedAlgorithm::ES256 => "ES256",
+            SupportedAlgorithm::ES384 => "ES384",
+            SupportedAlgorithm::ES512 => "ES512",
+            SupportedAlgorithm::EdDSA => "EdDSA",
+        }
+    }
 }
 
 pub enum SupportedHash {
