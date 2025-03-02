@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 base64 = "0.22.1"
+openssl = "0.10.71"
+hex = "0.4.3"
