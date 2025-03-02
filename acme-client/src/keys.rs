@@ -65,6 +65,7 @@ impl PrivateKey {
     }
     pub(crate) fn ec_thumbprint(&self) -> Result<serde_json::Value, Error> {
         let ec = self.k.ec_key()?;
+        // "padding" but really - sizes according to RFC 7517
         let (padding, crv) = match self.kt {
             SupportedKey::EcP256 => (32, "P-256"),
             SupportedKey::EcP384 => (48, "P-384"),
@@ -98,7 +99,7 @@ impl PrivateKey {
             if line.is_empty() || line.starts_with("-----") {
                 continue;
             }
-            // don't even want know what poor bastard had to make this in the first place before it was yanked by chat-gpt
+            // don't even want know what the (original dev) poor bastard had to do to make this work in the first place before it was yanked by chat-gpt
             x += &line.trim().trim_end_matches('=').replace('/', "_").replace('+', "-");
         }
         x.replace_range(..16, "");
