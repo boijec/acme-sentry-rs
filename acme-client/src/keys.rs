@@ -38,16 +38,16 @@ impl PrivateKey {
     }
 }
 
-fn gen_rsa(key_length: u32) -> Result<PKey<Private>, Error> {
+pub(crate) fn gen_rsa(key_length: u32) -> Result<PKey<Private>, Error> {
     let rsa = Rsa::generate(key_length)?;
     Ok(PKey::from_rsa(rsa)?)
 }
 
-fn gen_ec(ec_type: &SupportedKey) -> Result<PKey<Private>, Error> {
+pub(crate) fn gen_ec(ec_type: &SupportedKey) -> Result<PKey<Private>, Error> {
     let ec = EcKey::generate(EcGroup::from_curve_name(ec_type.get_nid())?.as_ref())?;
     Ok(PKey::from_ec_key(ec)?)
 }
 
-fn gen_ed() -> Result<PKey<Private>, Error> {
+pub(crate) fn gen_ed() -> Result<PKey<Private>, Error> {
     Ok(PKey::generate_ed25519()?)
 }

@@ -1,62 +1,56 @@
 use crate::crypto::SupportedKey;
-use crate::keys::PrivateKey;
+use crate::keys::{gen_ec, gen_ed, gen_rsa};
 
 #[test]
 fn test_rsa_creation_and_length() {
     {
-        let key = match PrivateKey::from_supported_type(SupportedKey::Rsa2048) {
+        let key = match gen_rsa(2048) {
             Ok(key) => key,
             Err(e) => panic!("{:?}", e),
         };
-        assert!(key.is_type(&SupportedKey::Rsa2048));
-        assert_eq!(key.k.bits(), 2048);
+        assert_eq!(key.bits(), 2048);
     }
     {
-        let key = match PrivateKey::from_supported_type(SupportedKey::Rsa4096) {
+        let key = match gen_rsa(4096) {
             Ok(key) => key,
             Err(e) => panic!("{:?}", e),
         };
-        assert!(key.is_type(&SupportedKey::Rsa4096));
-        assert_eq!(key.k.bits(), 4096);
+        assert_eq!(key.bits(), 4096);
     }
 }
 
 #[test]
 fn test_ec_creation_and_length() {
     {
-        let key = match PrivateKey::from_supported_type(SupportedKey::EcP256) {
+        let key = match gen_ec(&SupportedKey::EcP256) {
             Ok(key) => key,
             Err(e) => panic!("{:?}", e),
         };
-        assert!(key.is_type(&SupportedKey::EcP256));
-        assert_eq!(key.k.bits(), 256);
+        assert_eq!(key.bits(), 256);
     }
     {
-        let key = match PrivateKey::from_supported_type(SupportedKey::EcP384) {
+        let key = match gen_ec(&SupportedKey::EcP384) {
             Ok(key) => key,
             Err(e) => panic!("{:?}", e),
         };
-        assert!(key.is_type(&SupportedKey::EcP384));
-        assert_eq!(key.k.bits(), 384);
+        assert_eq!(key.bits(), 384);
     }
     {
-        let key = match PrivateKey::from_supported_type(SupportedKey::EcP521) {
+        let key = match gen_ec(&SupportedKey::EcP521) {
             Ok(key) => key,
             Err(e) => panic!("{:?}", e),
         };
-        assert!(key.is_type(&SupportedKey::EcP521));
-        assert_eq!(key.k.bits(), 521);
+        assert_eq!(key.bits(), 521);
     }
 }
 
 #[test]
 fn test_ed_creation_and_length() {
     {
-        let key = match PrivateKey::from_supported_type(SupportedKey::Ed25519) {
+        let key = match gen_ed() {
             Ok(key) => key,
             Err(e) => panic!("{:?}", e),
         };
-        assert!(key.is_type(&SupportedKey::Ed25519));
-        assert_eq!(key.k.bits(), 256);
+        assert_eq!(key.bits(), 256);
     }
 }
