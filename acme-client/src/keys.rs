@@ -65,6 +65,7 @@ impl PrivateKey {
     }
     pub(crate) fn ec_thumbprint(&self) -> Result<serde_json::Value, Error> {
         let ec = self.k.ec_key()?;
+        // "padding" but really - sizes according to RFC 7517
         let (padding, crv) = match self.kt {
             SupportedKey::EcP256 => (32, "P-256"),
             SupportedKey::EcP384 => (48, "P-384"),
