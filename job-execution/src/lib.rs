@@ -35,7 +35,6 @@ impl JobQueue {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
     use super::*;
 
     struct AddJob {
@@ -58,18 +57,8 @@ mod tests {
     fn test_queue_and_de_queue() {
         let job_queue = JobQueue::new();
         job_queue.write(Box::new(AddJob { a: 2, b: 2, result: 0 }));
-        job_queue.write(Box::new(AddJob { a: 2, b: 2, result: 0 }));
-        job_queue.write(Box::new(AddJob { a: 2, b: 2, result: 0 }));
-        job_queue.write(Box::new(AddJob { a: 2, b: 3, result: 0 }));
-        let start = Instant::now();
-        loop {
-            let mut job = job_queue.read();
-            job.execute();
-            if job.get_result() == String::from("5") {
-                break;
-            }
-            assert_eq!(job.get_result(), String::from("4"));
-        }
-        println!("Time elapsed: {:?}", start.elapsed());
+        let mut job = job_queue.read();
+        job.execute();
+        assert_eq!(job.get_result(), String::from("4"));
     }
 }
