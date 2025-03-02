@@ -99,7 +99,7 @@ impl PrivateKey {
             if line.is_empty() || line.starts_with("-----") {
                 continue;
             }
-            // don't even want know what the (original dev) poor bastard had to do make this work in the first place before it was yanked by chat-gpt
+            // don't even want know what the (original dev) poor bastard had to do to make this work in the first place before it was yanked by chat-gpt
             x += &line.trim().trim_end_matches('=').replace('/', "_").replace('+', "-");
         }
         x.replace_range(..16, "");
