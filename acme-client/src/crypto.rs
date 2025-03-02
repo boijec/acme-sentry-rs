@@ -1,6 +1,8 @@
 use std::error::Error;
+use openssl::nid::Nid;
 use openssl::sha::{sha256, sha384, sha512};
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum SupportedKey {
     Rsa2048,
     Rsa4096,
@@ -18,6 +20,16 @@ impl SupportedKey {
             SupportedKey::EcP384 => SupportedAlgorithm::ES384,
             SupportedKey::EcP521 => SupportedAlgorithm::ES512,
             SupportedKey::Ed25519 => SupportedAlgorithm::EdDSA
+        }
+    }
+
+    pub fn get_nid(&self) -> Nid {
+        match self {
+            SupportedKey::Rsa2048 | SupportedKey::Rsa4096 => Nid::RSA,
+            SupportedKey::EcP256 => Nid::X9_62_PRIME256V1,
+            SupportedKey::EcP384 => Nid::SECP384R1,
+            SupportedKey::EcP521 => Nid::SECP521R1,
+            SupportedKey::Ed25519 => Nid::X9_62_PRIME256V1,
         }
     }
 }
