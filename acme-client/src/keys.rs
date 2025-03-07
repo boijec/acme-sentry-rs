@@ -14,7 +14,7 @@ pub struct PrivateKey {
 }
 
 impl PrivateKey {
-    pub fn from_supported_type(key_type: SupportedKey) -> Result<PrivateKey, Error> {
+    pub fn from_supported_type(key_type: SupportedKey) -> Result<Self, Error> {
         match key_type {
             SupportedKey::Rsa2048 => {
                 Ok(PrivateKey {
@@ -43,18 +43,13 @@ impl PrivateKey {
 
     pub fn get_jwk(&self) -> Result<serde_json::Value, Error> {
         match self.kt {
-            SupportedKey::Rsa2048 | SupportedKey::Rsa4096 => {
-                Ok(self.rsa_thumbprint()?)
-            },
-            SupportedKey::EcP256 | SupportedKey::EcP384 | SupportedKey::EcP521 => {
-                Ok(self.ec_thumbprint()?)
-            },
-            SupportedKey::Ed25519 => {
-                Ok(self.ed_thumbprint()?)
-            }
+            SupportedKey::Rsa2048 | SupportedKey::Rsa4096 => Ok(self.rsa_jwk()?),
+            SupportedKey::EcP256 | SupportedKey::EcP384 | SupportedKey::EcP521 => Ok(self.ec_jwk()?),
+            SupportedKey::Ed25519 => Ok(self.ed_jwk()?)
         }
     }
-    pub(crate) fn rsa_thumbprint(&self) -> Result<serde_json::Value, Error> {
+
+    pub (crate) fn rsa_jwk(&self) -> Result<serde_json::Value, Error> {
         let rsa = self.k.rsa()?;
         Ok(json!({
             "kty": self.kt.get_kty(),
@@ -63,7 +58,7 @@ impl PrivateKey {
             "n": encode_b64(&rsa.n().to_vec()),
         }))
     }
-    pub(crate) fn ec_thumbprint(&self) -> Result<serde_json::Value, Error> {
+    pub (crate) fn ec_jwk(&self) -> Result<serde_json::Value, Error> {
         let ec = self.k.ec_key()?;
         // "padding" but really - sizes according to RFC 7517
         let (padding, crv) = match self.kt {
@@ -85,7 +80,7 @@ impl PrivateKey {
             "y": encode_b64(&y.to_vec_padded(padding)?),
         }))
     }
-    pub(crate) fn ed_thumbprint(&self) -> Result<serde_json::Value, Error> {
+    pub (crate) fn ed_jwk(&self) -> Result<serde_json::Value, Error> {
         // Neither google nor siri knew what the fuck to do
         // chat-gpt suggested throwing everything in a temp-file and re-reading that
         // but that sounds too fucking nasty
