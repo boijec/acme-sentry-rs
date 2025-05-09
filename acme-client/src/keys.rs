@@ -1,14 +1,14 @@
 use crate::crypto::SupportedKey;
 use crate::encoding::encode_b64;
+use crate::jws::JWSHeader;
 use openssl::bn::{BigNum, BigNumContext, BigNumRef};
 use openssl::ec::{EcGroup, EcKey};
 use openssl::ecdsa::EcdsaSig;
 use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::rsa::Rsa;
-use openssl::sha::{sha256, sha384, sha512};
 use openssl::sign::Signer;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::error::Error;
 
 pub struct PrivateKey {
@@ -109,74 +109,60 @@ impl PrivateKey {
         }))
     }
 
-    pub fn sign(&self, payload: &String) -> Result<Vec<u8>, Box<dyn Error>> {
+    pub fn sign(&self, header: &JWSHeader, jws_data: &String) -> Result<Vec<u8>, Box<dyn Error>> {
         match self.kt {
             SupportedKey::Rsa2048 | SupportedKey::Rsa4096 => {
-                Ok(self.sign_rsa(payload)?)
+                Ok(self.sign_rsa(jws_data)?)
             }
             SupportedKey::EcP256 | SupportedKey::EcP384 | SupportedKey::EcP521 => {
-                Ok(self.sign_elliptic_curve(payload)?)
+                Ok(self.sign_elliptic_curve(header, jws_data)?)
             }
             SupportedKey::Ed25519 => {
-                Ok(self.sign_ed(payload)?)
+                Ok(self.sign_ed(jws_data)?)
             }
         }
 
     }
 
-    fn sign_rsa(&self, payload: &String) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn sign_rsa(&self, data: &String) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut t = Signer::new(MessageDigest::sha256(), &self.k)?;
-        Ok(t.sign_oneshot_to_vec(payload.as_bytes())?)
+        Ok(t.sign_oneshot_to_vec(data.as_bytes())?)
     }
 
-    // TODO: fix the ugly bs of a match statement in here and replace with the SupportedAlgs enum from earlier
-    fn sign_elliptic_curve(&self, payload: &String) -> Result<Vec<u8>, Box<dyn Error>> {
-        let hash = match self.kt {
-            SupportedKey::EcP256 => sha256(payload.as_bytes()).to_vec(),
-            SupportedKey::EcP384 => sha384(payload.as_bytes()).to_vec(),
-            SupportedKey::EcP521 => sha512(payload.as_bytes()).to_vec(),
-            _ => {
-                return Err("not implemented".into())
-            }
-        };
-        let t = EcdsaSig::sign(&hash, &self.k.ec_key()?.as_ref())?;
-        let size = match self.kt {
-            SupportedKey::EcP256 => 32,
-            SupportedKey::EcP384 => 48,
-            SupportedKey::EcP521 => 66,
-            _ => {
-                return Err("not implemented".into())
-            }
-        };
-        let mut r = fast_coordinate_buffer_write(t.r(), size);
-        let mut s = fast_coordinate_buffer_write(t.s(), size);
+    fn sign_elliptic_curve(&self, header: &JWSHeader, data: &String) -> Result<Vec<u8>, Box<dyn Error>> {
+        let hash = header.get_alg().get_hash().hash(data.as_bytes())?;
+        let ec_sign = EcdsaSig::sign(&hash, &self.k.ec_key()?.as_ref())?;
+        let size = self.kt.get_coordinate_size();
+        let mut r = fast_coordinate_padded_vector(ec_sign.r(), size);
+        let mut s = fast_coordinate_padded_vector(ec_sign.s(), size);
         r.append(&mut s);
         Ok(r)
     }
 
-    fn sign_ed(&self, payload: &String) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn sign_ed(&self, data: &String) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut t = Signer::new_without_digest(&self.k)?;
-        Ok(t.sign_oneshot_to_vec(payload.as_bytes())?)
+        Ok(t.sign_oneshot_to_vec(data.as_bytes())?)
     }
 }
 
 /// Size will differ on ES512, EC521 key coordinates should be 66 bytes in length
 /// The big number ref returned by the key is 65.
 /// As fast way to get a new arr with the 66 bytes and the rest copied over is to
-/// use the resize method and fill the preceding bytes with padded "0"-oes
-fn fast_coordinate_buffer_write(key_coordinate: &BigNumRef, expected_coordinate_size: usize) -> Vec<u8> {
-    let mut coordinate_vector = key_coordinate.to_vec();
-    if coordinate_vector.len() == expected_coordinate_size {
+/// use the resize method and fill the preceding bytes with padded "0"-s.
+/// If you really want to lose brain cells, read X9.62 or FIPS 186-2
+fn fast_coordinate_padded_vector(key_coordinate: &BigNumRef, coordinate_size: usize) -> Vec<u8> {
+    let coordinate_vector = key_coordinate.to_vec();
+    if coordinate_vector.len() == coordinate_size {
         return coordinate_vector;
     }
     // make new Vec with the full expected capacity.
-    let mut capped_vec = Vec::with_capacity(expected_coordinate_size);
+    let mut padded_vec = Vec::with_capacity(coordinate_size);
     // truncate the bitch, use the leftovers as padding.
-    // ex. 66 expected - 65 actual == truncate to size 1 and fill with byte 0
-    capped_vec.resize(expected_coordinate_size - coordinate_vector.len(), 0);
+    // ex. 66 (coordinate_size) - 65 (coordinate_vector.len()) == truncate to size 1 and pad the starting "overflow" with 0 bytes
+    padded_vec.resize(coordinate_size - coordinate_vector.len(), 0);
     // fill in the blanks and the capped_vec should be of size `expected_coordinate_size`
-    capped_vec.append(&mut coordinate_vector);
-    capped_vec
+    padded_vec.extend(coordinate_vector);
+    padded_vec
 }
 
 pub(crate) fn gen_rsa(key_length: u32) -> Result<PKey<Private>, Box<dyn Error>> {

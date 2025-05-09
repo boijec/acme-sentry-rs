@@ -1,18 +1,18 @@
 use std::error::Error;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use crate::crypto::SupportedAlgorithm;
 use crate::encoding::encode_b64;
 use crate::keys::PrivateKey;
 
 pub struct JWS {
     header: JWSHeader,
     payload: Value,
-    signature: Option<String>
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct JWSHeader {
-    alg: String,
+    alg: SupportedAlgorithm,
     kid: Option<String>,
     jwk: Option<Value>,
     nonce: Option<String>,
@@ -20,15 +20,16 @@ pub struct JWSHeader {
 }
 
 impl JWSHeader {
-    pub fn with_alg(alg: &str) -> Self {
+    pub fn with_alg(alg: SupportedAlgorithm) -> Self {
         JWSHeader{
-            alg: alg.to_string(),
+            alg,
             kid: None,
             jwk: None,
             nonce: None,
             url: None,
         }
     }
+
     pub fn serialize_with_pkey(&self, pkey: &PrivateKey) -> Result<String, Box<dyn Error>> {
         Ok(serde_json::to_string(&json!({
             "alg": self.alg,
@@ -46,6 +47,10 @@ impl JWSHeader {
             "url": "",
         }))?)
     }
+
+    pub fn get_alg(&self) -> &SupportedAlgorithm {
+        &self.alg
+    }
 }
 
 impl JWS {
@@ -53,12 +58,13 @@ impl JWS {
         JWS {
             header,
             payload,
-            signature: None,
         }
     }
     pub fn finalize(&self, pkey: &PrivateKey) -> Result<String, Box<dyn Error>> {
-        let prep_string = format!("{}.{}", encode_b64(self.header.serialize_with_pkey(&pkey)?.as_bytes()), encode_b64(self.payload.to_string().as_bytes()));
-        let t = pkey.sign(&prep_string)?;
-        Ok(format!("{}.{}", prep_string, encode_b64(t.as_ref())))
+        let encoded_header = encode_b64(self.header.serialize_with_pkey(&pkey)?.as_bytes());
+        let encoded_payload = encode_b64(self.payload.to_string().as_bytes());
+        let jws_data = format!("{}.{}", encoded_header, encoded_payload);
+        let signature = pkey.sign(&self.header, &jws_data)?;
+        Ok(format!("{}.{}", jws_data, encode_b64(signature.as_ref())))
     }
 }

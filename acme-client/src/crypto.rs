@@ -1,6 +1,8 @@
-use std::error::Error;
 use openssl::nid::Nid;
 use openssl::sha::{sha256, sha384, sha512};
+use serde::{Deserialize, Serialize, Serializer};
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SupportedKey {
@@ -12,6 +14,12 @@ pub enum SupportedKey {
     Ed25519
 }
 
+impl Display for SupportedKey {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
+}
+
 impl SupportedKey {
     pub fn get_key_alg(&self) -> SupportedAlgorithm {
         match self {
@@ -20,6 +28,17 @@ impl SupportedKey {
             SupportedKey::EcP384 => SupportedAlgorithm::ES384,
             SupportedKey::EcP521 => SupportedAlgorithm::ES512,
             SupportedKey::Ed25519 => SupportedAlgorithm::EdDSA
+        }
+    }
+
+    pub fn to_string(&self) -> &str {
+        match self {
+            SupportedKey::Rsa2048 => "RSA (2048 bytes)",
+            SupportedKey::Rsa4096 => "RSA (4096 bytes)",
+            SupportedKey::EcP256 => "EllipticCurve P-256",
+            SupportedKey::EcP384 => "EllipticCurve P-384",
+            SupportedKey::EcP521 => "EllipticCurve P-512",
+            SupportedKey::Ed25519 => "Ed DSA (Ed25519)"
         }
     }
 
@@ -40,14 +59,39 @@ impl SupportedKey {
             SupportedKey::Ed25519 => Nid::X9_62_PRIME256V1,
         }
     }
+
+    pub fn get_coordinate_size(&self) -> usize {
+        match self {
+            SupportedKey::EcP256 => 32,
+            SupportedKey::EcP384 => 48,
+            SupportedKey::EcP521 => 66,
+            kt => panic!("Coordinate size is not available for key type: {}", kt)
+        }
+    }
 }
 
+#[derive(Debug, Deserialize)]
 pub enum SupportedAlgorithm {
     RS256,
     ES256,
     ES384,
     ES512,
     EdDSA,
+}
+
+impl Display for SupportedAlgorithm {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+impl Serialize for SupportedAlgorithm {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        serializer.serialize_str(&self.to_string())
+    }
 }
 
 impl SupportedAlgorithm {
@@ -58,6 +102,26 @@ impl SupportedAlgorithm {
             SupportedAlgorithm::ES384 => "ES384",
             SupportedAlgorithm::ES512 => "ES512",
             SupportedAlgorithm::EdDSA => "EdDSA",
+        }
+    }
+
+    pub fn from_str(alg: &str) -> SupportedAlgorithm {
+        match alg {
+            "RS256" => SupportedAlgorithm::RS256,
+            "ES256" => SupportedAlgorithm::ES256,
+            "ES384" => SupportedAlgorithm::ES384,
+            "ES512" => SupportedAlgorithm::ES512,
+            "EdDSA" => SupportedAlgorithm::EdDSA,
+             default => panic!("Algorithm {} is not supported", default)
+        }
+    }
+
+    pub fn get_hash(&self) -> SupportedHash {
+        match self {
+            SupportedAlgorithm::ES256 => SupportedHash::SHA256,
+            SupportedAlgorithm::ES384 => SupportedHash::SHA384,
+            SupportedAlgorithm::ES512 => SupportedHash::SHA512,
+            any => panic!("Hash not supported for alg: {}", any)
         }
     }
 }
