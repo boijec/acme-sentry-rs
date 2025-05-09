@@ -20,6 +20,7 @@ pub struct JWSHeader {
 }
 
 impl JWSHeader {
+    // bad idea, find something else... this will be impacted by the "directory" communication.
     pub fn with_alg(alg: SupportedAlgorithm) -> Self {
         JWSHeader{
             alg,
