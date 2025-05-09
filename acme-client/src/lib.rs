@@ -1,7 +1,7 @@
 pub mod encoding;
 pub mod crypto;
 pub mod keys;
-mod jws;
+pub mod jws;
 
 #[cfg(test)]
 mod test;

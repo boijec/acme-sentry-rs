@@ -5,9 +5,11 @@ use openssl::bn::BigNum;
 use openssl::rsa::Rsa;
 use serde::Deserialize;
 
+// Only used in tests, since we don't really care to serialize the jwk (yet...)
 #[derive(Deserialize, Debug)]
-struct Jwk {
+struct RsaJwk {
     kty: String,
+    alg: String,
     e: String,
     n: String,
 }
@@ -79,7 +81,7 @@ fn test_rsa_thumbprint() {
     let rsa = key.k.rsa().unwrap();
     let e = encode_b64(&rsa.e().to_vec());
     let n = encode_b64(&rsa.n().to_vec());
-    let j: Jwk = serde_json::from_value(jwk).unwrap();
+    let j: RsaJwk = serde_json::from_value(jwk).unwrap();
     assert_eq!(j.kty, "RSA");
     assert_eq!(j.e, e);
     assert_eq!(j.n, n);
@@ -96,7 +98,7 @@ fn test_rsa_public_key_thumbprint() {
         Err(e) => panic!("{:?}", e),
     };
     let rsa = key.k.rsa().unwrap();
-    let j: Jwk = serde_json::from_value(jwk).unwrap();
+    let j: RsaJwk = serde_json::from_value(jwk).unwrap();
     let e_bytes = decode_b64(j.e.as_bytes()).unwrap();
     let n_bytes = decode_b64(j.n.as_bytes()).unwrap();
     let e = BigNum::from_slice(&e_bytes).unwrap();
