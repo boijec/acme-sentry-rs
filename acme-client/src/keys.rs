@@ -133,8 +133,8 @@ impl PrivateKey {
         let hash = header.get_alg().get_hash().hash(data.as_bytes())?;
         let ec_sign = EcdsaSig::sign(&hash, &self.k.ec_key()?.as_ref())?;
         let size = self.kt.get_coordinate_size();
-        let mut r = fast_coordinate_padded_vector(ec_sign.r(), size);
-        let mut s = fast_coordinate_padded_vector(ec_sign.s(), size);
+        let mut r = fast_padded_coordinate_vector(ec_sign.r(), size);
+        let mut s = fast_padded_coordinate_vector(ec_sign.s(), size);
         r.append(&mut s);
         Ok(r)
     }
@@ -150,7 +150,7 @@ impl PrivateKey {
 /// As fast way to get a new arr with the 66 bytes and the rest copied over is to
 /// use the resize method and fill the preceding bytes with padded "0"-s.
 /// If you really want to lose brain cells, read X9.62 or FIPS 186-2
-fn fast_coordinate_padded_vector(key_coordinate: &BigNumRef, coordinate_size: usize) -> Vec<u8> {
+fn fast_padded_coordinate_vector(key_coordinate: &BigNumRef, coordinate_size: usize) -> Vec<u8> {
     let coordinate_vector = key_coordinate.to_vec();
     if coordinate_vector.len() == coordinate_size {
         return coordinate_vector;
