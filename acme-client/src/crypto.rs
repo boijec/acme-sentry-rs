@@ -3,6 +3,7 @@ use openssl::sha::{sha256, sha384, sha512};
 use serde::{Deserialize, Serialize, Serializer};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use openssl::hash::MessageDigest;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SupportedKey {
@@ -118,10 +119,11 @@ impl SupportedAlgorithm {
 
     pub fn get_hash(&self) -> SupportedHash {
         match self {
+            SupportedAlgorithm::RS256 => SupportedHash::SHA256,
             SupportedAlgorithm::ES256 => SupportedHash::SHA256,
             SupportedAlgorithm::ES384 => SupportedHash::SHA384,
             SupportedAlgorithm::ES512 => SupportedHash::SHA512,
-            any => panic!("Hash not supported for alg: {}", any)
+            SupportedAlgorithm::EdDSA => SupportedHash::SHA256
         }
     }
 }
@@ -138,6 +140,14 @@ impl SupportedHash {
             SupportedHash::SHA256 => Ok(sha256(hash_data).to_vec()),
             SupportedHash::SHA384 => Ok(sha384(hash_data).to_vec()),
             SupportedHash::SHA512 => Ok(sha512(hash_data).to_vec())
+        }
+    }
+
+    pub fn get_digest(&self) -> MessageDigest {
+        match self {
+            SupportedHash::SHA256 => MessageDigest::sha256(),
+            SupportedHash::SHA384 => MessageDigest::sha384(),
+            SupportedHash::SHA512 => MessageDigest::sha512(),
         }
     }
 }

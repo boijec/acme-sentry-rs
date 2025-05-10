@@ -125,17 +125,17 @@ impl PrivateKey {
     }
 
     fn sign_rsa(&self, data: &String) -> Result<Vec<u8>, Box<dyn Error>> {
-        let mut t = Signer::new(MessageDigest::sha256(), &self.k)?;
-        Ok(t.sign_oneshot_to_vec(data.as_bytes())?)
+        let mut signer = Signer::new(MessageDigest::sha256(), &self.k)?;
+        Ok(signer.sign_oneshot_to_vec(data.as_bytes())?)
     }
 
     fn sign_elliptic_curve(&self, header: &JWSHeader, data: &String) -> Result<Vec<u8>, Box<dyn Error>> {
         let hash = header.get_alg().get_hash().hash(data.as_bytes())?;
-        let ec_sign = EcdsaSig::sign(&hash, &self.k.ec_key()?.as_ref())?;
-        let size = self.kt.get_coordinate_size();
-        let mut r = fast_padded_coordinate_vector(ec_sign.r(), size);
-        let mut s = fast_padded_coordinate_vector(ec_sign.s(), size);
-        r.append(&mut s);
+        let signer = EcdsaSig::sign(&hash, &self.k.ec_key()?.as_ref())?;
+        let coordinate_size = self.kt.get_coordinate_size();
+        let mut r = fast_padded_coordinate_vector(signer.r(), coordinate_size);
+        let s = fast_padded_coordinate_vector(signer.s(), coordinate_size);
+        r.extend(s);
         Ok(r)
     }
 
