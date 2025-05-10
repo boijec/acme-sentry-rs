@@ -6,3 +6,4 @@ pub mod jws;
 #[cfg(test)]
 mod test;
 mod csr;
+mod certificate;

@@ -125,7 +125,7 @@ impl PrivateKey {
     }
 
     fn sign_rsa(&self, data: &String) -> Result<Vec<u8>, Box<dyn Error>> {
-        let mut signer = Signer::new(MessageDigest::sha256(), &self.k)?;
+        let mut signer = Signer::new(self.kt.get_key_alg().get_hash().get_digest(), &self.k)?;
         Ok(signer.sign_oneshot_to_vec(data.as_bytes())?)
     }
 
