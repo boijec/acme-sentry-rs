@@ -147,9 +147,22 @@ impl PrivateKey {
 
 /// Size will differ on ES512, EC521 key coordinates should be 66 bytes in length
 /// The big number ref returned by the key is 65.
+///
 /// A fast way to get a new vec with the 66 bytes and the rest copied over is to
 /// use the resize method and fill the preceding bytes with padded "0"-s.
-/// If you really want to lose brain cells, read X9.62 or FIPS 186-2
+///
+/// If you really want to lose brain cells, read FIPS 186-2
+///
+/// TL;DR
+///
+/// Take a vector of 5 bytes:
+/// ```
+/// [215, 215, 215, 215, 215]
+/// ```
+/// If coordinate needs to have length 7 bytes, the resulting vector *has* to be:
+/// ```
+/// [0, 0, 215, 215, 215, 215, 215]
+/// ```
 fn fast_padded_coordinate_vector(key_coordinate: &BigNumRef, coordinate_size: usize) -> Vec<u8> {
     let coordinate_vector = key_coordinate.to_vec();
     if coordinate_vector.len() == coordinate_size {
