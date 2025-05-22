@@ -1,4 +1,5 @@
 use job_execution;
+use persistence;
 use acme_client;
 use acme_client::crypto::SupportedKey;
 use acme_client::keys::PrivateKey;

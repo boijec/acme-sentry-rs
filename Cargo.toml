@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 job-execution = { path = "./job-execution" }
 acme-client = { path = "./acme-client" }
+persistence = { path = "./persistence" }
 serde_json = "1.0.140"
