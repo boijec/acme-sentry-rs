@@ -4,11 +4,10 @@ use crate::jws::JWSHeader;
 use openssl::bn::{BigNum, BigNumContext, BigNumRef};
 use openssl::ec::{EcGroup, EcKey};
 use openssl::ecdsa::EcdsaSig;
-use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::rsa::Rsa;
 use openssl::sign::Signer;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::error::Error;
 
 pub struct PrivateKey {
@@ -156,13 +155,10 @@ impl PrivateKey {
 /// TL;DR
 ///
 /// Take a vector of 5 bytes:
-/// ```
 /// [215, 215, 215, 215, 215]
-/// ```
+/// 
 /// If coordinate needs to have length 7 bytes, the resulting vector *has* to be:
-/// ```
 /// [0, 0, 215, 215, 215, 215, 215]
-/// ```
 fn fast_padded_coordinate_vector(key_coordinate: &BigNumRef, coordinate_size: usize) -> Vec<u8> {
     let coordinate_vector = key_coordinate.to_vec();
     if coordinate_vector.len() == coordinate_size {

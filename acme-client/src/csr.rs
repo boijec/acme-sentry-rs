@@ -2,10 +2,14 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private};
 use openssl::x509::{X509NameBuilder, X509Req, X509ReqBuilder};
 
+// TODO: remove allow
+#[allow(dead_code)]
 pub struct CertificateSigningRequest {
     x509req: X509Req
 }
 
+// TODO: remove allow
+#[allow(dead_code)]
 pub fn create_new_certificate_request(
     country: &str,
     state: Option<&str>,
