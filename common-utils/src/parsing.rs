@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::ops::Not;
 use std::slice::Iter;
+use crate::logging::Logger;
 
 pub enum ParamOption {
     Value,
@@ -27,6 +28,7 @@ impl ParseError {
 pub struct InternalInlineParsingTool;
 impl InternalInlineParsingTool {
     pub fn parse_args(arg_iter: &mut Iter<String>, match_commands: &HashMap<String, ParamOption>) -> Result<HashMap<String, String>, ParseError> {
+        Logger::trace("Received arguments.. will try matching with commands");
         let mut map: HashMap<String, String> = HashMap::new();
         let mut next_iter_allowed_to_fail: bool = false;
         let mut skip_to_next_iter: bool = false;

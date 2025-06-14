@@ -1,18 +1,22 @@
 use common_utils::EnumIterator;
 use std::error::Error;
+use std::fmt::{Display, Formatter};
 use std::slice::Iter;
+use common_utils::logging::Logger;
 
 pub struct DatabaseConnection {
     connection: sqlite::Connection,
 }
 // TODO: remove allow
 #[allow(dead_code)]
+#[derive(Debug)]
 enum PreFlightCheckList {
     AcmeUsersTable,
     AcmeUserDirectory,
     AcmeUserOrders,
     AcmeUserCertificates,
 }
+#[derive(Debug)]
 enum SqliteSettings {
     ForeignKeysEnabled,
 }
@@ -25,6 +29,16 @@ impl SqlStatement for SqliteSettings {
         match self {
             SqliteSettings::ForeignKeysEnabled => "PRAGMA foreign_keys = ON;",
         }
+    }
+}
+impl Display for SqliteSettings {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl Display for PreFlightCheckList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 impl EnumIterator<PreFlightCheckList> for PreFlightCheckList {
@@ -80,15 +94,19 @@ impl DatabaseConnection {
     pub fn get_connection() -> Result<DatabaseConnection, Box<dyn Error>> {
         let connection = sqlite::open("acme-sentry.db")?;
         for settings in SqliteSettings::iterator() {
+            Logger::trace(&format!("Executing setting: {} for Sqlite", settings));
             connection.execute(settings.get_statement())?
         }
+        Logger::trace("Settings have been executed!");
         Ok(DatabaseConnection { connection })
     }
 
     pub fn internal_structure_check(&self) -> Result<(), Box<dyn Error>> {
         for pre_flight in PreFlightCheckList::iterator() {
+            Logger::trace(&format!("Executing pre-flight script: {}", pre_flight));
             self.connection.execute(pre_flight.get_statement())?;
         }
+        Logger::trace("Pre-flight has been executed!");
         Ok(())
     }
 }
