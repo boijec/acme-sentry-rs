@@ -9,23 +9,14 @@ use crate::job_execution::job_base::Scheduler;
 use crate::statics::Args;
 use clap::{crate_version, Parser};
 use std::env;
-use tracing::Level;
+use tracing::{info, info_span, Instrument, Level};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
-    splash(args.version);
-    if args.version {
-        return Ok(());
-    }
-    let level: Level = args.logging_level.unwrap_or(Level::INFO);
-    tracing_subscriber::fmt()
-        .with_max_level(level)
-        .init();
+async fn async_main(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let (scheduler, handle) = Scheduler::new(32);
-    let span = tracing::info_span!("main", request_id = "nan", user = "bob");
-    let _guard = span.enter();
-    tokio::spawn(scheduler.run(handle.clone()));
+    let scheduler_span = info_span!("scheduler");
+    let _ = tokio::spawn(scheduler.run(handle.clone()).instrument(scheduler_span));
+    let span = info_span!("main");
+    let _ = span.enter();
     handle.submit(DbInitializationJob::new()).await?;
     handle
         .submit(InitializeLocalUserJob::new(
@@ -39,16 +30,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?)
         .await?;
     if args.application_mode {
+        info!("Application mode has been enabled, monitoring input signals.");
         let mut h = handle.clone();
         tokio::select! {
-        _ = tokio::signal::ctrl_c() => { h.shutdown().await; }
-        _ = h.wait_for_shutdown() => {}
-    }
+            _ = tokio::signal::ctrl_c() => { h.shutdown().await; }
+            _ = h.wait_for_shutdown() => {}
+        }
     } else {
+        info!("Single shot mode enabled - application will shut down right now!");
         handle.shutdown().await;
     }
-    drop(_guard);
     Ok(())
+}
+
+fn main() {
+    let args = Args::parse();
+    let level: Level = args.logging_level.unwrap_or(Level::INFO);
+    tracing_subscriber::fmt().with_max_level(level).init();
+    splash(args.version);
+    if args.version {
+        return;
+    }
+    let span = info_span!("main");
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(async_main(args).instrument(span))
+        .expect("TODO: panic message");
 }
 
 fn splash(print_version: bool) {
@@ -56,7 +63,7 @@ fn splash(print_version: bool) {
         "{}\n",
         String::from_utf8_lossy(include_bytes!("assets/ico.bin"))
     );
-    if (print_version) {
+    if print_version {
         println!("Version: {}", crate_version!());
         print!(
             "{}\n",

@@ -3,7 +3,7 @@ use sqlite::Statement;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::slice::Iter;
-use tracing::{debug, info, trace};
+use tracing::{debug, info};
 
 pub struct DatabaseConnection {
     connection: sqlite::Connection,
@@ -102,10 +102,10 @@ impl DatabaseConnection {
     pub fn get_connection() -> Result<DatabaseConnection, Box<dyn Error>> {
         let connection = sqlite::open("acme-sentry.db")?;
         for settings in SqliteSettings::iterator() {
-            info!("Executing setting: {} for Sqlite", settings);
+            debug!("Executing setting: {} for Sqlite", settings);
             connection.execute(settings.get_statement())?
         }
-        info!("Settings have been executed!");
+        debug!("Database settings have been executed!");
         Ok(DatabaseConnection { connection })
     }
 
@@ -115,10 +115,10 @@ impl DatabaseConnection {
 
     pub fn internal_structure_check(&self) -> Result<(), Box<dyn Error>> {
         for pre_flight in PreFlightCheckList::iterator() {
-            info!("Executing pre-flight script: {}", pre_flight);
+            debug!("Executing pre-flight script: {}", pre_flight);
             self.connection.execute(pre_flight.get_statement())?;
         }
-        info!("Pre-flight has been executed!");
+        info!("Pre-flight database scripts have been executed!");
         Ok(())
     }
 }

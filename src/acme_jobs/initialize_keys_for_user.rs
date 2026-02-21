@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
+use tracing::instrument;
 
 #[derive(Serialize, Deserialize)]
 pub struct InitializeLocalUserJob {
@@ -24,11 +25,12 @@ impl InitializeLocalUserJob {
 #[async_trait]
 impl Job for InitializeLocalUserJob {
     fn job_type(&self) -> &'static str {
-        "InitializeLocalUserJob"
+        "initialize-local-user-job"
     }
     fn payload(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
+    #[instrument(level = "trace", name = "initialize_local_user_job", fields(job_name = %self.job_type()), skip_all)]
     async fn execute(&self, handle: SchedulerHandle) -> anyhow::Result<()>{
         let result = self.create_from_incoming_type();
         Ok(())

@@ -2,11 +2,11 @@ use crate::job_execution::job_base::{Job, SchedulerHandle};
 use acme_client::comms::directory::AcmeDirectory;
 use async_trait::async_trait;
 use persistence::database::DatabaseConnection;
-use reqwest::{Response, Url};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
 use std::error::Error;
-use tracing::{debug, info, trace};
+use tracing::{info, instrument, trace};
 
 #[derive(Serialize, Deserialize)]
 pub struct DirectoryQueryJob {
@@ -62,11 +62,12 @@ impl DirectoryQueryJob {
 #[async_trait]
 impl Job for DirectoryQueryJob {
     fn job_type(&self) -> &'static str {
-        "DirectoryQueryJob"
+        "directory-query-job"
     }
     fn payload(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
+    #[instrument(level = "trace", name = "directory_query_job", fields(job_name = %self.job_type()), skip_all)]
     async fn execute(&self, _scheduler: SchedulerHandle) -> anyhow::Result<()> {
         let value = self.call_directory().await?;
         let dir: AcmeDirectory = from_value(value.clone())?;

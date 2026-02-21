@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot, watch};
-use tracing::{debug, error, info, trace};
+use tracing::{error, info, instrument, trace, Instrument, Span};
 
 #[async_trait]
 pub trait Job: Send + 'static {
@@ -65,19 +65,18 @@ impl Scheduler {
         };
         (scheduler, handle)
     }
+    #[instrument(level = "trace", name = "scheduler", skip_all)]
     pub async fn run(mut self, handle: SchedulerHandle) {
         info!("Scheduler started");
         while let Some(message) = self.receiver.recv().await {
             match message {
                 SchedulerMessage::Job(job) => {
                     let job_name = job.job_type();
-                    let span = tracing::info_span!("main", job_name = job_name);
-                    let _guard = span.enter();
-                    let job_result = job.execute(handle.clone()).await;
+                    let span = tracing::info_span!("worker", job_name = job_name);
+                    let job_result = job.execute(handle.clone()).instrument(span).await;
                     if job_result.is_err() {
                         error!("Failed to execute job");
                     }
-                    drop(_guard);
                 }
                 SchedulerMessage::Shutdown(ack) => {
                     info!("Shutdown hook triggered, draining queue...");
@@ -85,13 +84,11 @@ impl Scheduler {
                     while let Ok(msg) = self.receiver.try_recv() {
                         if let SchedulerMessage::Job(job) = msg {
                             let job_name = job.job_type();
-                            let span = tracing::info_span!("main", job_name = job_name);
-                            let _guard = span.enter();
-                            let job_result = job.execute(handle.clone()).await;
+                            let span = tracing::info_span!("worker-cleanup", job_name = job_name);
+                            let job_result = job.execute(handle.clone()).instrument(span).await;
                             if job_result.is_err() {
                                 error!("Failed to execute job");
                             }
-                            drop(_guard);
                         }
                     }
                     let _ = ack.send(());
@@ -111,7 +108,7 @@ mod tests {
     use async_trait::async_trait;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
-    use tracing::{debug, info, instrument};
+    use tracing::{info, instrument};
 
     #[derive(Serialize, Deserialize, Debug)]
     struct PrintJob {

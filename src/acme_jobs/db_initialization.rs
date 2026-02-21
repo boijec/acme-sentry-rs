@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tracing::instrument;
 use persistence::database::DatabaseConnection;
 use crate::job_execution::job_base::{Job, SchedulerHandle};
 
@@ -14,11 +15,12 @@ impl DbInitializationJob {
 #[async_trait]
 impl Job for DbInitializationJob {
     fn job_type(&self) -> &'static str {
-        "DbInitializationJob"
+        "db-initialization-job"
     }
     fn payload(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
+    #[instrument(level = "trace", name = "db_initialization_job", fields(job_name = %self.job_type()), skip_all)]
     async fn execute(&self, _: SchedulerHandle) -> anyhow::Result<()> {
         let db = DatabaseConnection::get_connection().unwrap();
         db.internal_structure_check().unwrap();

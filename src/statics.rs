@@ -19,13 +19,13 @@ pub struct Args {
     pub dir_out: String,
 }
 
-fn log_level_parse(s: &str) -> Result<Option<Level>, String> {
+fn log_level_parse(s: &str) -> Result<Level, String> {
     match s.to_lowercase().as_str() {
-        "trace" => Ok(Some(Level::TRACE)),
-        "debug" => Ok(Some(Level::DEBUG)),
-        "info" => Ok(Some(Level::INFO)),
-        "warn" => Ok(Some(Level::WARN)),
-        "error" => Ok(Some(Level::ERROR)),
-        _ => Ok(Some(Level::INFO)),
+        "trace" => Ok(Level::TRACE),
+        "debug" => Ok(Level::DEBUG),
+        "info" => Ok(Level::INFO),
+        "warn" => Ok(Level::WARN),
+        "error" => Ok(Level::ERROR),
+        _ => Ok(Level::INFO),
     }
 }
