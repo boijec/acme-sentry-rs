@@ -7,12 +7,14 @@ use openssl::ecdsa::EcdsaSig;
 use openssl::pkey::{PKey, Private};
 use openssl::rsa::Rsa;
 use openssl::sign::Signer;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::error::Error;
+use serde::Deserialize;
+use crate::jwk::fast_padded_coordinate_vector;
 
 pub struct PrivateKey {
-    kt: SupportedKey,
-    pub k: PKey<Private>,
+    pub kt: SupportedKey,
+    pub k: PKey<Private>
 }
 
 impl PrivateKey {
@@ -144,35 +146,7 @@ impl PrivateKey {
     }
 }
 
-/// Size will differ on ES512, EC521 key coordinates should be 66 bytes in length
-/// The big number ref returned by the key is 65.
-///
-/// A fast way to get a new vec with the 66 bytes and the rest copied over is to
-/// use the resize method and fill the preceding bytes with padded "0"-s.
-///
-/// If you really want to lose brain cells, read FIPS 186-2
-///
-/// TL;DR
-///
-/// Take a vector of 5 bytes:
-/// [215, 215, 215, 215, 215]
-/// 
-/// If coordinate needs to have length 7 bytes, the resulting vector *has* to be:
-/// [0, 0, 215, 215, 215, 215, 215]
-fn fast_padded_coordinate_vector(key_coordinate: &BigNumRef, coordinate_size: usize) -> Vec<u8> {
-    let coordinate_vector = key_coordinate.to_vec();
-    if coordinate_vector.len() == coordinate_size {
-        return coordinate_vector;
-    }
-    // make new Vec with the full expected capacity.
-    let mut padded_vec = Vec::with_capacity(coordinate_size);
-    // truncate the bitch
-    // ex. 66 (coordinate_size) - 65 (coordinate_vector.len()) == truncate to size 1 and pad the starting "overflow" with 0 bytes
-    padded_vec.resize(coordinate_size - coordinate_vector.len(), 0);
-    // fill in the blanks and the padded_vec should be of size `expected_coordinate_size`
-    padded_vec.extend(coordinate_vector);
-    padded_vec
-}
+
 
 pub(crate) fn gen_rsa(key_length: u32) -> Result<PKey<Private>, Box<dyn Error>> {
     let rsa = Rsa::generate(key_length)?;

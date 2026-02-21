@@ -1,8 +1,9 @@
+use common_utils::logging::Logger;
 use common_utils::EnumIterator;
+use sqlite::Statement;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::slice::Iter;
-use common_utils::logging::Logger;
 
 pub struct DatabaseConnection {
     connection: sqlite::Connection,
@@ -19,6 +20,10 @@ enum PreFlightCheckList {
 #[derive(Debug)]
 enum SqliteSettings {
     ForeignKeysEnabled,
+}
+#[derive(Debug)]
+enum KeyOperations {
+    GetKeyFromKeyId,
 }
 
 trait SqlStatement {
@@ -37,6 +42,11 @@ impl Display for SqliteSettings {
     }
 }
 impl Display for PreFlightCheckList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl Display for KeyOperations {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
@@ -99,6 +109,10 @@ impl DatabaseConnection {
         }
         Logger::trace("Settings have been executed!");
         Ok(DatabaseConnection { connection })
+    }
+
+    pub fn prepare(&self, prepared_statement: &str) -> Result<Statement, Box<dyn Error>> {
+        Ok(self.connection.prepare(prepared_statement)?)
     }
 
     pub fn internal_structure_check(&self) -> Result<(), Box<dyn Error>> {

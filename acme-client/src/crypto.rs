@@ -32,6 +32,36 @@ impl SupportedKey {
         }
     }
 
+    pub fn from_curve(crv: &str) -> SupportedKey {
+        match crv {
+            "P-256" => SupportedKey::EcP256,
+            "P-384" => SupportedKey::EcP384,
+            "P-521" => SupportedKey::EcP521,
+            _ => panic!("Unknown curve {}", crv)
+        }
+    }
+
+    pub fn from_kty(kty: &str) -> SupportedKey {
+        match kty {
+            "RSA" => SupportedKey::Rsa2048,
+            "EC" => SupportedKey::EcP256,
+            "Ed25519" => SupportedKey::Ed25519,
+            _ => panic!("Unknown kty {}", kty),
+        }
+    }
+
+    pub fn from_str(string: &str) -> Result<SupportedKey, Box<dyn Error>> {
+        match string.to_lowercase().as_str() {
+            "rsa-2048" => Ok(SupportedKey::Rsa2048),
+            "rsa-4096" => Ok(SupportedKey::Rsa4096),
+            "ec-p256" => Ok(SupportedKey::EcP256),
+            "ec-p384" => Ok(SupportedKey::EcP384),
+            "ec-p521" => Ok(SupportedKey::EcP521),
+            "ec-ed25519" => Ok(SupportedKey::Ed25519),
+            _ => Err(format!("Unknown key type {}", string).into()),
+        }
+    }
+
     pub fn to_string(&self) -> &str {
         match self {
             SupportedKey::Rsa2048 => "RSA (2048 bytes)",
@@ -71,7 +101,7 @@ impl SupportedKey {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub enum SupportedAlgorithm {
     RS256,
     ES256,

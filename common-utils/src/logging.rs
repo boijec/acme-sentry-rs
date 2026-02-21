@@ -27,6 +27,7 @@ thread_local! {
     static MDC: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
     static LOGGING_LEVEL: RefCell<LoggingLevel> = RefCell::new(LoggingLevel::DEBUG);
     static THREAD_NAME: RefCell<String> = RefCell::new(String::new());
+    static JOB_NAME: RefCell<String> = RefCell::new(String::new());
 }
 
 pub struct Logger;
@@ -44,7 +45,10 @@ impl Logger {
                 format!(" [{}]", kv_list.join(", "))
             }
         });
-        let thread_name = THREAD_NAME.with(|thread_name| thread_name.borrow().clone());
+        let mut thread_name = THREAD_NAME.with(|thread_name| thread_name.borrow().clone());
+        if thread_name == "" {
+            thread_name = std::thread::current().name().unwrap().to_string();
+        }
         format!("[{}] ({}){} {}", level.to_str(), thread_name, mdc, message)
     }
     fn log(level: LoggingLevel, message: &str) {
@@ -64,12 +68,12 @@ impl Logger {
         Self::initialize_with(LoggingLevel::INFO);
     }
     pub fn initialize_with<T: Into<LoggingLevel>>(level: T) {
-        let current_thread = std::thread::current();
-        if current_thread.name().is_some() {
-            THREAD_NAME.set(current_thread.name().unwrap().to_string());
-        } else {
-            THREAD_NAME.set("no_name".to_string());
-        }
+        Self::set_logging_level(level.into());
+    }
+    pub fn set_job_name(job_name: &str) {
+        JOB_NAME.set(job_name.to_string());
+    }
+    pub fn set_level<T: Into<LoggingLevel>>(level: T) {
         Self::set_logging_level(level.into());
     }
     pub fn insert_mdc<K: Into<String>, V: Into<String>>(key: K, value: V) {
