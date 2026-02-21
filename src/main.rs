@@ -8,8 +8,8 @@ use crate::acme_jobs::initialize_keys_for_user::InitializeLocalUserJob;
 use crate::job_execution::job_base::Scheduler;
 use crate::statics::Args;
 use clap::{crate_version, Parser};
-use common_utils::logging::Logger;
 use std::env;
+use tracing::Level;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -18,10 +18,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.version {
         return Ok(());
     }
-    let level = args.logging_level;
-    let _logger_instance_handler = Logger::new();
+    let level: Level = args.logging_level.unwrap_or(Level::INFO);
+    tracing_subscriber::fmt()
+        .with_max_level(level)
+        .init();
     let (scheduler, handle) = Scheduler::new(32);
-    tokio::spawn(scheduler.run(handle.clone(), level));
+    let span = tracing::info_span!("main", request_id = "nan", user = "bob");
+    let _guard = span.enter();
+    tokio::spawn(scheduler.run(handle.clone()));
     handle.submit(DbInitializationJob::new()).await?;
     handle
         .submit(InitializeLocalUserJob::new(
@@ -43,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         handle.shutdown().await;
     }
+    drop(_guard);
     Ok(())
 }
 

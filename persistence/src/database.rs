@@ -1,9 +1,9 @@
-use common_utils::logging::Logger;
 use common_utils::EnumIterator;
 use sqlite::Statement;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::slice::Iter;
+use tracing::{debug, info, trace};
 
 pub struct DatabaseConnection {
     connection: sqlite::Connection,
@@ -62,9 +62,7 @@ impl EnumIterator<PreFlightCheckList> for PreFlightCheckList {
 }
 impl EnumIterator<SqliteSettings> for SqliteSettings {
     fn iterator() -> Iter<'static, SqliteSettings> {
-        static SQLITE_SETTINGS: &[SqliteSettings] = &[
-            SqliteSettings::ForeignKeysEnabled
-        ];
+        static SQLITE_SETTINGS: &[SqliteSettings] = &[SqliteSettings::ForeignKeysEnabled];
         SQLITE_SETTINGS.iter()
     }
 }
@@ -104,10 +102,10 @@ impl DatabaseConnection {
     pub fn get_connection() -> Result<DatabaseConnection, Box<dyn Error>> {
         let connection = sqlite::open("acme-sentry.db")?;
         for settings in SqliteSettings::iterator() {
-            Logger::trace(&format!("Executing setting: {} for Sqlite", settings));
+            info!("Executing setting: {} for Sqlite", settings);
             connection.execute(settings.get_statement())?
         }
-        Logger::trace("Settings have been executed!");
+        info!("Settings have been executed!");
         Ok(DatabaseConnection { connection })
     }
 
@@ -117,10 +115,10 @@ impl DatabaseConnection {
 
     pub fn internal_structure_check(&self) -> Result<(), Box<dyn Error>> {
         for pre_flight in PreFlightCheckList::iterator() {
-            Logger::trace(&format!("Executing pre-flight script: {}", pre_flight));
+            info!("Executing pre-flight script: {}", pre_flight);
             self.connection.execute(pre_flight.get_statement())?;
         }
-        Logger::trace("Pre-flight has been executed!");
+        info!("Pre-flight has been executed!");
         Ok(())
     }
 }

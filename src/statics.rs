@@ -1,6 +1,6 @@
 use clap::Parser;
-use common_utils::logging::LoggingLevel;
 use std::option::Option;
+use tracing::Level;
 
 #[derive(Parser, Debug)]
 #[command(about, long_about = None)]
@@ -8,7 +8,7 @@ pub struct Args {
     #[arg(short, long)]
     pub version: bool,
     #[arg(short, long, value_parser = log_level_parse, help = "Enable verbose logging")]
-    pub logging_level: LoggingLevel,
+    pub logging_level: Option<Level>,
     #[arg(short, long, default_value_t = false, help = "Enable application-mode (input is required from user to terminate application)")]
     pub application_mode: bool,
     #[arg(short, long, default_value = "ec-p256", help = "Specify what key type, that acme-sentry should use to log in to the CA with")]
@@ -19,13 +19,13 @@ pub struct Args {
     pub dir_out: String,
 }
 
-fn log_level_parse(s: &str) -> Result<LoggingLevel, String> {
+fn log_level_parse(s: &str) -> Result<Option<Level>, String> {
     match s.to_lowercase().as_str() {
-        "trace" => Ok(LoggingLevel::TRACE),
-        "debug" => Ok(LoggingLevel::DEBUG),
-        "info" => Ok(LoggingLevel::INFO),
-        "warn" => Ok(LoggingLevel::WARN),
-        "error" => Ok(LoggingLevel::ERROR),
-        _ => Ok(LoggingLevel::INFO),
+        "trace" => Ok(Some(Level::TRACE)),
+        "debug" => Ok(Some(Level::DEBUG)),
+        "info" => Ok(Some(Level::INFO)),
+        "warn" => Ok(Some(Level::WARN)),
+        "error" => Ok(Some(Level::ERROR)),
+        _ => Ok(Some(Level::INFO)),
     }
 }

@@ -1,8 +1,7 @@
-use std::sync::mpsc::Receiver;
 use async_trait::async_trait;
 use serde_json::Value;
-use common_utils::logging::{Logger, LoggingLevel};
 use tokio::sync::{mpsc, oneshot, watch};
+use tracing::{debug, error, info, trace};
 
 #[async_trait]
 pub trait Job: Send + 'static {
@@ -14,7 +13,7 @@ enum SchedulerMessage {
     Job(Box<dyn Job>),
     Shutdown(oneshot::Sender<()>),
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SchedulerHandle {
     sender: mpsc::Sender<SchedulerMessage>,
     shutdown_rx: watch::Receiver<bool>,
@@ -36,7 +35,7 @@ impl SchedulerHandle {
             .send(SchedulerMessage::Shutdown(tx))
             .await
             .expect("Scheduler is already gone");
-        Logger::debug("Scheduler shutdown requested");
+        info!("Scheduler shutdown requested");
         rx
     }
     pub async fn wait_for_shutdown(&mut self) {
@@ -56,45 +55,53 @@ impl Scheduler {
         let (sender, receiver) = mpsc::channel(buffer);
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
-        let scheduler = Scheduler { receiver, shutdown_tx };
-        let handle = SchedulerHandle { sender, shutdown_rx };
+        let scheduler = Scheduler {
+            receiver,
+            shutdown_tx,
+        };
+        let handle = SchedulerHandle {
+            sender,
+            shutdown_rx,
+        };
         (scheduler, handle)
     }
-    pub async fn run(mut self, handle: SchedulerHandle, level: LoggingLevel) {
-        let _ = Logger::new();
-        Logger::initialize_with(level);
-        Logger::debug("Scheduler started");
+    pub async fn run(mut self, handle: SchedulerHandle) {
+        info!("Scheduler started");
         while let Some(message) = self.receiver.recv().await {
             match message {
                 SchedulerMessage::Job(job) => {
-                    Logger::insert_mdc("job-name", job.job_type());
+                    let job_name = job.job_type();
+                    let span = tracing::info_span!("main", job_name = job_name);
+                    let _guard = span.enter();
                     let job_result = job.execute(handle.clone()).await;
                     if job_result.is_err() {
-                        Logger::error("Failed to execute job");
+                        error!("Failed to execute job");
                     }
-                    Logger::remove_mdc("job-name");
+                    drop(_guard);
                 }
                 SchedulerMessage::Shutdown(ack) => {
-                    Logger::debug("Shutdown hook triggered, draining queue...");
+                    info!("Shutdown hook triggered, draining queue...");
                     self.receiver.close();
                     while let Ok(msg) = self.receiver.try_recv() {
                         if let SchedulerMessage::Job(job) = msg {
-                            Logger::insert_mdc("job-name", job.job_type());
+                            let job_name = job.job_type();
+                            let span = tracing::info_span!("main", job_name = job_name);
+                            let _guard = span.enter();
                             let job_result = job.execute(handle.clone()).await;
                             if job_result.is_err() {
-                                Logger::error("Failed to execute job");
+                                error!("Failed to execute job");
                             }
-                            Logger::remove_mdc("job-name");
+                            drop(_guard);
                         }
                     }
                     let _ = ack.send(());
-                    Logger::trace("Scheduler shutdown ack sent");
+                    info!("Scheduler shutdown ack sent");
                     break;
                 }
             }
         }
         let _ = self.shutdown_tx.send(true);
-        Logger::debug("Scheduler stopped");
+        info!("Scheduler stopped");
     }
 }
 
@@ -104,9 +111,9 @@ mod tests {
     use async_trait::async_trait;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
-    use common_utils::logging::{Logger, LoggingLevel};
+    use tracing::{debug, info, instrument};
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Debug)]
     struct PrintJob {
         id: u32,
     }
@@ -118,10 +125,11 @@ mod tests {
         fn payload(&self) -> Value {
             serde_json::to_value(self).unwrap()
         }
+        #[instrument]
         async fn execute(&self, _: SchedulerHandle) -> anyhow::Result<()> {
-            Logger::debug(format!("Running job {}", self.id).as_str());
+            info!("Running job {}", self.id);
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            Logger::debug(format!("Job {} done", self.id).as_str());
+            info!("Job {} done", self.id);
             Ok(())
         }
     }
@@ -129,11 +137,17 @@ mod tests {
     #[tokio::test]
     async fn test_struct_queue() {
         let (scheduler, handle) = Scheduler::new(32);
-        tokio::spawn(scheduler.run(handle.clone(), LoggingLevel::TRACE));
+        tokio::spawn(scheduler.run(handle.clone()));
         let handle2 = handle.clone();
-        handle.submit(PrintJob { id: 1 }).await.expect("TODO: panic message");
-        handle2.submit(PrintJob { id: 2 }).await.expect("TODO: panic message");
-        Logger::info("Verification printout");
+        handle
+            .submit(PrintJob { id: 1 })
+            .await
+            .expect("TODO: panic message");
+        handle2
+            .submit(PrintJob { id: 2 })
+            .await
+            .expect("TODO: panic message");
+        info!("Verification printout");
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         handle.shutdown().await;
     }

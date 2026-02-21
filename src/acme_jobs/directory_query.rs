@@ -1,12 +1,12 @@
 use crate::job_execution::job_base::{Job, SchedulerHandle};
 use acme_client::comms::directory::AcmeDirectory;
 use async_trait::async_trait;
-use common_utils::logging::Logger;
 use persistence::database::DatabaseConnection;
 use reqwest::{Response, Url};
-use serde_json::{Value, from_value};
-use std::error::Error;
 use serde::{Deserialize, Serialize};
+use serde_json::{from_value, Value};
+use std::error::Error;
+use tracing::{debug, info, trace};
 
 #[derive(Serialize, Deserialize)]
 pub struct DirectoryQueryJob {
@@ -22,13 +22,13 @@ impl DirectoryQueryJob {
         let client = reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
             .build()?;
-        Logger::debug("Calling the requested ACME directory");
+        info!("Calling the requested ACME directory");
         let response = client.get(self.base_url.as_str()).send().await?;
-        Logger::debug(format!("Response returned: {}", response.status()).as_str());
+        info!("Response returned: {}", response.status());
         let bytes = response.bytes().await?;
         let slice = bytes.iter().as_slice();
         let value = serde_json::from_slice::<Value>(slice)?;
-        Logger::trace(format!("{}", value).as_str());
+        info!("{}", value);
         Ok(value)
     }
     fn insert_dir_in_db(&self, acme_directory: AcmeDirectory) -> anyhow::Result<()> {
