@@ -1,3 +1,4 @@
+use std::sync::mpsc::Receiver;
 use async_trait::async_trait;
 use serde_json::Value;
 use common_utils::logging::{Logger, LoggingLevel};
@@ -26,19 +27,17 @@ impl SchedulerHandle {
             .map_err(|_| "Scheduler is shut down")
     }
     pub async fn shutdown(self) {
+        let rx = self.internal_shutdown().await;
+        rx.await.expect("Scheduler didn't confirm shutdown");
+    }
+    pub async fn internal_shutdown(&self) -> oneshot::Receiver<()> {
         let (tx, rx) = oneshot::channel();
         self.sender
             .send(SchedulerMessage::Shutdown(tx))
             .await
             .expect("Scheduler is already gone");
-        rx.await.expect("Scheduler didn't confirm shutdown");
-    }
-    pub async fn internal_shutdown(&self) {
-        let (tx, _rx) = oneshot::channel();
-        self.sender
-            .send(SchedulerMessage::Shutdown(tx))
-            .await
-            .expect("Scheduler is already gone");
+        Logger::debug("Scheduler shutdown requested");
+        rx
     }
     pub async fn wait_for_shutdown(&mut self) {
         self.shutdown_rx
@@ -76,7 +75,7 @@ impl Scheduler {
                     Logger::remove_mdc("job-name");
                 }
                 SchedulerMessage::Shutdown(ack) => {
-                    Logger::debug("Shutdown requested, draining queue...");
+                    Logger::debug("Shutdown hook triggered, draining queue...");
                     self.receiver.close();
                     while let Ok(msg) = self.receiver.try_recv() {
                         if let SchedulerMessage::Job(job) = msg {
@@ -89,6 +88,7 @@ impl Scheduler {
                         }
                     }
                     let _ = ack.send(());
+                    Logger::trace("Scheduler shutdown ack sent");
                     break;
                 }
             }
@@ -126,10 +126,10 @@ mod tests {
         }
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn test_struct_queue() {
         let (scheduler, handle) = Scheduler::new(32);
-        tokio::spawn(scheduler.run(handle.clone(), LoggingLevel::DEBUG));
+        tokio::spawn(scheduler.run(handle.clone(), LoggingLevel::TRACE));
         let handle2 = handle.clone();
         handle.submit(PrintJob { id: 1 }).await.expect("TODO: panic message");
         handle2.submit(PrintJob { id: 2 }).await.expect("TODO: panic message");
