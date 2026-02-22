@@ -103,7 +103,7 @@ impl SqlStatement for PreFlightCheckList {
 }
 impl DatabaseConnection {
     pub fn get_connection(db_loc: &str) -> Result<DatabaseConnection, Box<dyn Error>> {
-        debug!("Opening db at: {}", db_loc);
+        debug!("Opening db at: {}/acme-sentry.db", db_loc);
         let connection = sqlite::open((db_loc.to_owned() + "/acme-sentry.db").as_str())?;
         for settings in SqliteSettings::iterator() {
             debug!("Executing setting: {} for Sqlite", settings);
