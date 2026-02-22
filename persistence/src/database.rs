@@ -7,6 +7,7 @@ use tracing::{debug, info};
 
 pub struct DatabaseConnection {
     connection: sqlite::Connection,
+    db_loc: String,
 }
 // TODO: remove allow
 #[allow(dead_code)]
@@ -101,14 +102,15 @@ impl SqlStatement for PreFlightCheckList {
     }
 }
 impl DatabaseConnection {
-    pub fn get_connection() -> Result<DatabaseConnection, Box<dyn Error>> {
-        let connection = sqlite::open("acme-sentry.db")?;
+    pub fn get_connection(db_loc: &str) -> Result<DatabaseConnection, Box<dyn Error>> {
+        debug!("Opening db at: {}", db_loc);
+        let connection = sqlite::open((db_loc.to_owned() + "/acme-sentry.db").as_str())?;
         for settings in SqliteSettings::iterator() {
             debug!("Executing setting: {} for Sqlite", settings);
             connection.execute(settings.get_statement())?
         }
         debug!("Database settings have been executed!");
-        Ok(DatabaseConnection { connection })
+        Ok(DatabaseConnection { connection, db_loc: db_loc.to_owned() })
     }
 
     pub fn prepare(&self, prepared_statement: &str) -> Result<Statement, Box<dyn Error>> {

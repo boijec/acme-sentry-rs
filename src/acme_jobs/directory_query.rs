@@ -14,13 +14,14 @@ use tracing::{info, instrument};
 pub struct DirectoryQueryJob {
     pub base_url: String,
     pub user_id: String,
+    pub db_loc: String,
 }
 impl DirectoryQueryJob {
-    pub fn new(base_url: Option<String>, user_id: String) -> Result<Self, Box<dyn Error>> {
+    pub fn new(base_url: Option<String>, user_id: String, db_loc: String) -> Result<Self, Box<dyn Error>> {
         if let Some(base_url) = base_url {
             let x = base_url.to_owned() + "/dir";
             let _ = Url::parse(x.as_str())?;
-            return Ok(DirectoryQueryJob { base_url: x.to_string(), user_id })
+            return Ok(DirectoryQueryJob { base_url: x.to_string(), user_id, db_loc })
         }
         Err("Acme CA base url could not be parsed!".into())
     }
@@ -38,7 +39,7 @@ impl DirectoryQueryJob {
         Ok(value)
     }
     fn insert_dir_in_db(&self, acme_directory: AcmeDirectoryApi) -> anyhow::Result<Option<AcmeDirectory>> {
-        let connection = DatabaseConnection::get_connection().unwrap();
+        let connection = DatabaseConnection::get_connection(self.db_loc.as_str()).unwrap();
         let user = InitializeLocalUserJob::get_user(self.user_id.as_str(), &connection).unwrap();
         if user.is_none() {
             return Err(anyhow::anyhow!("Could not complete directory job since queried user could not be found!"))?;

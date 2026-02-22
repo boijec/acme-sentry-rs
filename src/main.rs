@@ -2,6 +2,7 @@ mod acme_jobs;
 mod job_execution;
 mod statics;
 
+use std::cell::RefCell;
 use crate::acme_jobs::db_initialization::DbInitializationJob;
 use crate::acme_jobs::directory_query::DirectoryQueryJob;
 use crate::acme_jobs::initialize_keys_for_user::InitializeLocalUserJob;
@@ -17,16 +18,18 @@ async fn async_main(args: Args, user_id: String) -> Result<(), Box<dyn std::erro
     let directory_job = DirectoryQueryJob::new(
         args.acme_base_url,
         user_id.clone(),
+        args.dir_out.to_string(),
     )?;
     let scheduler_span = info_span!("scheduler", user_id = user_id);
     scheduler_span.follows_from(Span::current());
     let _ = tokio::spawn(scheduler.run(handle.clone()).instrument(scheduler_span));
-    handle.submit(DbInitializationJob::new()).await?;
+    handle.submit(DbInitializationJob::new(args.dir_out.as_str())).await?;
     handle
         .submit(InitializeLocalUserJob::new(
             args.dir_out.to_string(),
             args.requested_login_key_type.to_string(),
             user_id.clone(),
+            args.dir_out.to_string(),
         ))
         .await?;
     handle

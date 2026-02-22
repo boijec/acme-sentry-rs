@@ -17,10 +17,11 @@ pub struct InitializeLocalUserJob {
     path: String,
     key_type: String,
     user_id: String,
+    db_loc: String,
 }
 impl InitializeLocalUserJob {
-    pub fn new(path: String, key_type: String, user_id: String) -> Self {
-        InitializeLocalUserJob { path, key_type, user_id }
+    pub fn new(path: String, key_type: String, user_id: String, db_loc: String) -> Self {
+        InitializeLocalUserJob { path, key_type, user_id, db_loc }
     }
     fn create_from_incoming_type(&self, supported_key: SupportedKey) -> Result<PrivateKey, Box<dyn Error>> {
         let result = PrivateKey::from_supported_type(supported_key)?;
@@ -75,7 +76,7 @@ impl Job for InitializeLocalUserJob {
     }
     #[instrument(level = "trace", name = "initialize_local_user_job", fields(job_name = %self.job_type()), skip_all)]
     async fn execute(&self, handle: SchedulerHandle) -> anyhow::Result<()>{
-        let connection = DatabaseConnection::get_connection().unwrap();
+        let connection = DatabaseConnection::get_connection(self.db_loc.as_str()).unwrap();
         let mut user = Self::get_user(self.user_id.as_str(), &connection);
         if user.is_err() {
             info!("User not found, creating user entry in database..");
