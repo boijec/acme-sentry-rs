@@ -18,7 +18,6 @@ use tracing::{error, info, info_span, Instrument, Level, Span};
 async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     let (scheduler, handle) = Scheduler::new(32);
     let config = APPLICATION_CONFIG.get().unwrap();
-    info!("{:?}", config);
     let directory_job = DirectoryQueryJob::new(
         Some(config.base_url.to_string()),
         config.user_id.clone(),
