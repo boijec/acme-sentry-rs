@@ -1,4 +1,4 @@
-use common_utils::EnumIterator;
+use common_utils::{EnumIterator, APPLICATION_CONFIG};
 use sqlite::Statement;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -6,8 +6,7 @@ use std::slice::Iter;
 use tracing::{debug, info};
 
 pub struct DatabaseConnection {
-    connection: sqlite::Connection,
-    db_loc: String,
+    connection: sqlite::Connection
 }
 // TODO: remove allow
 #[allow(dead_code)]
@@ -102,15 +101,16 @@ impl SqlStatement for PreFlightCheckList {
     }
 }
 impl DatabaseConnection {
-    pub fn get_connection(db_loc: &str) -> Result<DatabaseConnection, Box<dyn Error>> {
-        debug!("Opening db at: {}/acme-sentry.db", db_loc);
-        let connection = sqlite::open((db_loc.to_owned() + "/acme-sentry.db").as_str())?;
+    pub fn get_connection() -> Result<DatabaseConnection, Box<dyn Error>> {
+        let config = APPLICATION_CONFIG.get().unwrap();
+        debug!("Opening db at: {}/acme-sentry.db", config.base_dir.as_str());
+        let connection = sqlite::open((config.base_dir.to_owned() + "/acme-sentry.db").as_str())?;
         for settings in SqliteSettings::iterator() {
             debug!("Executing setting: {} for Sqlite", settings);
             connection.execute(settings.get_statement())?
         }
         debug!("Database settings have been executed!");
-        Ok(DatabaseConnection { connection, db_loc: db_loc.to_owned() })
+        Ok(DatabaseConnection { connection })
     }
 
     pub fn prepare(&self, prepared_statement: &str) -> Result<Statement, Box<dyn Error>> {
