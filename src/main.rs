@@ -3,31 +3,26 @@ mod job_execution;
 mod statics;
 
 use crate::acme_jobs::db_initialization::DbInitializationJob;
-use crate::acme_jobs::directory_query::DirectoryQueryJob;
+use crate::acme_jobs::directory_query::DirectoryUpdateJob;
 use crate::acme_jobs::initialize_keys_for_user::InitializeLocalUserJob;
 use crate::job_execution::job_base::Scheduler;
 use crate::statics::{Args, YamlConfig};
-use clap::{crate_version, Parser};
-use common_utils::{ApplicationConfig, InternalIdTooling, APPLICATION_CONFIG};
+use clap::{Parser, crate_version};
+use common_utils::{APPLICATION_CONFIG, ApplicationConfig, InternalIdTooling};
 use std::error::Error;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{env, fs};
-use tracing::{error, info, info_span, Instrument, Level, Span};
+use tracing::{Instrument, Span, error, info, info_span};
 
-async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
+async fn async_main() -> Result<(), Box<dyn Error>> {
     let (scheduler, handle) = Scheduler::new(32);
     let config = APPLICATION_CONFIG.get().unwrap();
-    let directory_job = DirectoryQueryJob::new(
-        Some(config.base_url.to_string()),
-        config.user_id.clone(),
-    )?;
+    DirectoryUpdateJob::validate_url(Some(config.base_url.clone()))?;
     let scheduler_span = info_span!("scheduler", user_id = config.user_id);
     scheduler_span.follows_from(Span::current());
     let _ = tokio::spawn(scheduler.run(handle.clone()).instrument(scheduler_span));
-    handle
-        .submit(DbInitializationJob::new())
-        .await?;
+    handle.submit(DbInitializationJob::new()).await?;
     handle
         .submit(InitializeLocalUserJob::new(
             config.output_dir.to_string(),
@@ -35,7 +30,12 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
             config.user_id.clone(),
         ))
         .await?;
-    handle.submit(directory_job).await?;
+    handle
+        .submit(DirectoryUpdateJob::new(
+            config.base_url.to_string(),
+            config.user_id.clone(),
+        )?)
+        .await?;
     if config.application_mode {
         info!("Application mode has been enabled, monitoring input signals.");
         let mut h = handle.clone();
@@ -53,14 +53,15 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() {
     let args = Args::parse();
-    let level: Level = args.logging_level;
     splash(args.clone().version);
     if args.version {
         return;
     }
     let _ = write_application_config(args.clone()).unwrap();
     let conf = APPLICATION_CONFIG.get().unwrap();
-    tracing_subscriber::fmt().with_max_level(conf.logging_level.unwrap()).init();
+    tracing_subscriber::fmt()
+        .with_max_level(conf.logging_level.unwrap())
+        .init();
     let user_id = conf.user_id.clone();
     let span = info_span!("main", user_id = user_id);
     tokio::runtime::Runtime::new()
@@ -87,7 +88,7 @@ fn handle_mode(args: Args) -> Result<(bool, bool), Box<dyn Error>> {
     Ok((false, false))
 }
 
-fn write_application_config(args: Args) -> Result<(), Box<dyn std::error::Error>> {
+fn write_application_config(args: Args) -> Result<(), Box<dyn Error>> {
     let (yaml_mode, application_mode) = handle_mode(args.clone())?;
     if yaml_mode {
         let yaml_file = fs::read_to_string(PathBuf::from_str(args.yaml_config.unwrap().as_str())?)?;

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 use std::path::PathBuf;
+use anyhow::anyhow;
 use tracing::{info, instrument};
 
 #[derive(Serialize, Deserialize)]
@@ -32,6 +33,7 @@ impl InitializeLocalUserJob {
         let s = user.user_id.as_str().to_owned() + ".pem";
         let fp = result.clone();
         let supported_key = SupportedKey::from_str(user.key_type.as_str())?;
+        info!("Configured key type for user: {}", supported_key.to_string());
         let key: PrivateKey;
         if system.file_exists(fp, s.as_str()) {
             info!("Key file for user {}, found! Instantiating required keys!", user.user_id);
@@ -84,14 +86,14 @@ impl Job for InitializeLocalUserJob {
             let dump_path = system.ensure_sub_dir(format!("{}", self.user_id).as_str()).unwrap();
             let result = self.new_user(path, dump_path, &connection).unwrap();
             if let Some(acme_user) = result {
-                info!("User created: {:?}", acme_user);
+                info!("User created: User [ id: {}, user_id: {} ] with key type: {}", acme_user.id, acme_user.user_id, acme_user.key_type);
                 user = Ok(Some(acme_user));
             } else {
                 return Err(anyhow::anyhow!("User could not be picked back up!"));
             }
         }
         let user = user.unwrap().unwrap();
-        info!("User found in database: {:?}", user);
+        info!("User found in database: User [ id: \"{}\", user_id: \"{}\" ]", user.id, user.user_id);
         let key = self.check_for_required_files(user).unwrap();
         Ok(())
     }

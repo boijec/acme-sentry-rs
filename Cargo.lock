@@ -23,6 +23,7 @@ dependencies = [
  "async-trait",
  "clap",
  "common-utils",
+ "log",
  "persistence",
  "reqwest 0.13.1",
  "serde",
@@ -990,6 +991,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 name = "persistence"
 version = "0.1.0"
 dependencies = [
+ "acme-client",
  "common-utils",
  "sqlite",
  "tracing",

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot, watch};
-use tracing::{error, info, instrument, trace, Instrument, Span};
+use tracing::{error, info, instrument, trace, warn, Instrument, Span};
 
 #[async_trait]
 pub trait Job: Send + 'static {
@@ -68,16 +68,23 @@ impl Scheduler {
     #[instrument(level = "trace", name = "scheduler", skip_all)]
     pub async fn run(mut self, handle: SchedulerHandle) {
         info!("Scheduler started");
+        let mut clean_lever = false;
         while let Some(message) = self.receiver.recv().await {
             match message {
                 SchedulerMessage::Job(job) => {
-                    let job_name = job.job_type();
-                    let span = tracing::info_span!("worker", job_name = job_name);
-                    span.follows_from(tracing::Span::current());
-                    let job_result = job.execute(handle.clone()).instrument(span).await;
-                    if job_result.is_err() {
-                        let e = job_result.unwrap_err();
-                        error!("Failed to execute job: {:?}", e);
+                    if !clean_lever {
+                        let job_name = job.job_type();
+                        let span = tracing::info_span!("worker", job_name = job_name);
+                        span.follows_from(tracing::Span::current());
+                        let job_result = job.execute(handle.clone()).instrument(span).await;
+                        if job_result.is_err() {
+                            let e = job_result.unwrap_err();
+                            error!("Failed to execute job: {:?}", e);
+                            warn!("A job in the queue has errored out queue will be alive until shutdown hook is called");
+                            clean_lever = true;
+                        }
+                    } else {
+                        warn!("Scheduler ignoring job: {}", job.job_type());
                     }
                 }
                 SchedulerMessage::Shutdown(ack) => {
