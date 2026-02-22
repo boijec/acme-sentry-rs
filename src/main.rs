@@ -32,7 +32,7 @@ async fn async_main() -> Result<(), Box<dyn Error>> {
         .await?;
     handle
         .submit(DirectoryUpdateJob::new(
-            config.base_url.to_string(),
+            Some(config.base_url.to_string()),
             config.user_id.clone(),
         )?)
         .await?;

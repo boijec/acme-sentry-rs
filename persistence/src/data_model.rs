@@ -32,6 +32,7 @@ impl AcmeUser {
 pub struct AcmeDirectory {
     pub directory_id: i64,
     pub user_id: String,
+    pub directory_base_url: String,
     pub key_change: String,
     pub new_authz: Option<String>,
     pub new_nonce: String,
@@ -78,6 +79,7 @@ impl AcmeDirectory {
             let dir = Self {
                 directory_id: statement.read::<i64, _>("directory_id")?,
                 user_id: statement.read::<String, _>("user_id")?,
+                directory_base_url: statement.read::<String, _>("directory_base_url")?,
                 key_change: statement.read::<String, _>("key_change")?,
                 new_nonce: statement.read::<String, _>("new_nonce")?,
                 new_account: statement.read::<String, _>("new_account")?,

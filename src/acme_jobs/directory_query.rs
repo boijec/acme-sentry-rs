@@ -13,15 +13,21 @@ use tracing::{info, instrument};
 
 #[derive(Serialize, Deserialize)]
 pub struct DirectoryUpdateJob {
-    pub base_url: String,
+    pub base_url: Option<String>,
     pub user_id: String,
 }
 impl DirectoryUpdateJob {
-    pub fn new(base_url: String, user_id: String) -> Result<Self, Box<dyn Error>> {
-        let url = Self::validate_url(Some(base_url.clone()))?;
+    pub fn new(base_url: Option<String>, user_id: String) -> Result<Self, Box<dyn Error>> {
+        if base_url.is_none() {
+            return Ok(DirectoryUpdateJob {
+                user_id,
+                base_url: None,
+            })
+        }
+        let url = Self::validate_url(base_url.clone())?;
         Ok(DirectoryUpdateJob {
             user_id,
-            base_url: url.to_string(),
+            base_url: Some(url.to_string()),
         })
     }
     pub fn validate_url(base_url: Option<String>) -> Result<Url, Box<dyn Error>> {
@@ -32,13 +38,13 @@ impl DirectoryUpdateJob {
         }
         Err("Acme CA base url could not be parsed!".into())
     }
-    async fn call_directory(&self) -> anyhow::Result<Value> {
+    async fn call_directory(&self, base_url: String) -> anyhow::Result<Value> {
         let client = reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
             .build()?;
-        info!("Calling the requested ACME directory");
-        let response = client.get(self.base_url.as_str()).send().await?;
-        info!("Response returned: {}", response.status());
+        info!("Calling ACME directory");
+        let response = client.get(base_url.as_str()).send().await?;
+        info!("ACME directory returned response: {}", response.status());
         let bytes = response.bytes().await?;
         let slice = bytes.iter().as_slice();
         let value = serde_json::from_slice::<Value>(slice)?;
@@ -56,11 +62,23 @@ impl DirectoryUpdateJob {
         statement.bind((1, user_id))?;
         Ok(AcmeDirectory::scan_statement(statement).unwrap())
     }
+    fn get_dir_from_user(&self, connection: &DatabaseConnection) -> anyhow::Result<Option<AcmeDirectory>> {
+        let user = InitializeLocalUserJob::get_user(self.user_id.as_str(), &connection).unwrap();
+        if user.is_none() {
+            return Err(anyhow::anyhow!(
+                "Could not complete directory job since queried user could not be found!"
+            ))?;
+        }
+        let user = user.unwrap();
+        let existing_dir = self.get_existing(user.id, &connection)?;
+        Ok(existing_dir)
+    }
     fn refresh_if_diff(
         &self,
         acme_directory: AcmeDirectoryApi,
+        acme_dir_url: String,
+        connection: &DatabaseConnection,
     ) -> anyhow::Result<Option<AcmeDirectory>> {
-        let connection = DatabaseConnection::get_connection().unwrap();
         let user = InitializeLocalUserJob::get_user(self.user_id.as_str(), &connection).unwrap();
         if user.is_none() {
             return Err(anyhow::anyhow!(
@@ -74,13 +92,14 @@ impl DirectoryUpdateJob {
             sql = r#"
             INSERT INTO acme_users_directory(
                 user_id,
+                directory_base_url,
                 new_nonce,
                 new_account,
                 new_order,
                 new_authz,
                 revoke_cert,
                 key_change
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING *;
+            ) VALUES (?1, ?8, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING *;
             "#;
         } else {
             let existing = existing_dir.unwrap();
@@ -105,11 +124,13 @@ impl DirectoryUpdateJob {
         ))?;
         statement.bind((6, acme_directory.revoke_cert.as_str()))?;
         statement.bind((7, acme_directory.key_change.as_str()))?;
+        statement.bind((8, acme_dir_url.as_str()))?;
         Ok(AcmeDirectory::scan_statement(statement).unwrap())
     }
     fn get_update(&self) -> &'static str {
         r#"
         UPDATE acme_users_directory SET
+            directory_base_url = ?8
             new_nonce = ?2,
             new_account = ?3,
             new_order = ?4,
@@ -131,10 +152,26 @@ impl Job for DirectoryUpdateJob {
     }
     #[instrument(level = "trace", name = "directory_update_job", fields(job_name = %self.job_type()), skip_all)]
     async fn execute(&self, _scheduler: SchedulerHandle) -> anyhow::Result<()> {
-        let value = self.call_directory().await?;
-        let dir: AcmeDirectoryApi = from_value(value.clone())?;
-        let t = self.refresh_if_diff(dir)?;
-        if let Some(dir) = t {
+        if self.base_url.is_none() {
+            info!("Acme base uri not configured for job, will look in user state...");
+        }
+        let dir: AcmeDirectoryApi;
+        let connection = DatabaseConnection::get_connection().unwrap();
+        let result = self.get_dir_from_user(&connection)?;
+        let directory_result: Option<AcmeDirectory>;
+        if result.is_none() {
+            let url = self.base_url.clone().unwrap();
+            let value = self.call_directory(url.clone()).await?;
+            dir = from_value(value.clone())?;
+            directory_result = self.refresh_if_diff(dir, url, &connection)?;
+        } else {
+            let result = result.unwrap();
+            let url = result.directory_base_url;
+            let value = self.call_directory(url.clone()).await?;
+            dir = from_value(value.clone())?;
+            directory_result = self.refresh_if_diff(dir, url, &connection)?;
+        }
+        if let Some(dir) = directory_result {
             info!("Directory refresh returned directory with id: {}", dir.directory_id);
         }
         Ok(())

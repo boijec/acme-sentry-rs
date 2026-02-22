@@ -85,6 +85,7 @@ impl SqlStatement for PreFlightCheckList {
                 CREATE TABLE IF NOT EXISTS acme_users_directory(
                     directory_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
+                    directory_base_url TEXT(512) NOT NULL,
                     new_nonce TEXT(512) NOT NULL,
                     new_account TEXT(512),
                     new_order TEXT(512) NOT NULL,
