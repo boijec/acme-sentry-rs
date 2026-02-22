@@ -8,3 +8,4 @@ common-utils = { path = "./../common-utils" }
 acme-client = { path = "./../acme-client" }
 sqlite = "0.37.0"
 tracing = "0.1.44"
+anyhow = "1.0.102"

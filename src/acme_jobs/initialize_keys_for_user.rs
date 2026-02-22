@@ -4,13 +4,11 @@ use acme_client::keys::PrivateKey;
 use async_trait::async_trait;
 use common_utils::fs;
 use fs::FileSystem;
-use persistence::data_model::AcmeUser;
 use persistence::database::DatabaseConnection;
+use persistence::user::AcmeUser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
-use std::path::PathBuf;
-use anyhow::anyhow;
 use tracing::{info, instrument};
 
 #[derive(Serialize, Deserialize)]
@@ -46,26 +44,6 @@ impl InitializeLocalUserJob {
         }
         Ok(key)
     }
-    pub fn get_user(user_id: &str, conn: &DatabaseConnection) -> anyhow::Result<Option<AcmeUser>, Box<dyn Error>> {
-        let sql = r#"
-            SELECT * FROM acme_users WHERE user_id = ?1
-            "#;
-        let mut statement = conn.prepare(sql)?;
-        statement.bind((1, user_id))?;
-        Ok(Some(AcmeUser::scan_statement(statement)?))
-    }
-    fn new_user(&self, key_path: PathBuf, dump_path: PathBuf, conn: &DatabaseConnection) -> Result<Option<AcmeUser>, Box<dyn Error>> {
-        let sql = r#"
-            INSERT INTO acme_users (user_id, key_type, key_path, user_dump_path)
-            VALUES (?1, ?2, ?3, ?4) RETURNING *;
-            "#;
-        let mut statement = conn.prepare(sql)?;
-        statement.bind((1, self.user_id.as_str()))?;
-        statement.bind((2, self.key_type.as_str()))?;
-        statement.bind((3, key_path.as_path().to_str().unwrap()))?;
-        statement.bind((4, dump_path.as_path().to_str().unwrap()))?;
-        Ok(Some(AcmeUser::scan_statement(statement)?))
-    }
 }
 #[async_trait]
 impl Job for InitializeLocalUserJob {
@@ -76,15 +54,15 @@ impl Job for InitializeLocalUserJob {
         serde_json::to_value(self).unwrap()
     }
     #[instrument(level = "trace", name = "initialize_local_user_job", fields(job_name = %self.job_type()), skip_all)]
-    async fn execute(&self, handle: SchedulerHandle) -> anyhow::Result<()>{
+    async fn execute(&self, _: SchedulerHandle) -> anyhow::Result<()>{
         let connection = DatabaseConnection::get_connection().unwrap();
-        let mut user = Self::get_user(self.user_id.as_str(), &connection);
+        let mut user = AcmeUser::get_user(self.user_id.as_str(), &connection);
         if user.is_err() {
             info!("User not found, creating user entry in database..");
             let system = FileSystem::new(self.path.as_str()).unwrap();
             let path = system.ensure_sub_dir(format!("{}/login-keys/{}", self.user_id, self.key_type).as_str()).unwrap();
             let dump_path = system.ensure_sub_dir(format!("{}", self.user_id).as_str()).unwrap();
-            let result = self.new_user(path, dump_path, &connection).unwrap();
+            let result = AcmeUser::new_user(path, dump_path, self.user_id.clone(), self.key_type.clone(), &connection).unwrap();
             if let Some(acme_user) = result {
                 info!("User created: User [ id: {}, user_id: {} ] with key type: {}", acme_user.id, acme_user.user_id, acme_user.key_type);
                 user = Ok(Some(acme_user));
@@ -94,7 +72,7 @@ impl Job for InitializeLocalUserJob {
         }
         let user = user.unwrap().unwrap();
         info!("User found in database: User [ id: \"{}\", user_id: \"{}\" ]", user.id, user.user_id);
-        let key = self.check_for_required_files(user).unwrap();
+        let _key = self.check_for_required_files(user).unwrap();
         Ok(())
     }
 }

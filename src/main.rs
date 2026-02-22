@@ -5,6 +5,7 @@ mod statics;
 use crate::acme_jobs::db_initialization::DbInitializationJob;
 use crate::acme_jobs::directory_query::DirectoryUpdateJob;
 use crate::acme_jobs::initialize_keys_for_user::InitializeLocalUserJob;
+use crate::acme_jobs::login_user::LoginUserJob;
 use crate::job_execution::job_base::Scheduler;
 use crate::statics::{Args, YamlConfig};
 use clap::{Parser, crate_version};
@@ -35,6 +36,9 @@ async fn async_main() -> Result<(), Box<dyn Error>> {
             Some(config.base_url.to_string()),
             config.user_id.clone(),
         )?)
+        .await?;
+    handle
+        .submit(LoginUserJob::new(config.user_id.clone()))
         .await?;
     if config.application_mode {
         info!("Application mode has been enabled, monitoring input signals.");

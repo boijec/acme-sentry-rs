@@ -1,10 +1,8 @@
-use crate::acme_jobs::initialize_keys_for_user::InitializeLocalUserJob;
 use crate::job_execution::job_base::{Job, SchedulerHandle};
 use acme_client::comms::directory::AcmeDirectoryApi;
 use async_trait::async_trait;
-use common_utils::CompareFields;
-use persistence::data_model::AcmeDirectory;
 use persistence::database::DatabaseConnection;
+use persistence::directory::AcmeDirectory;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
@@ -50,96 +48,6 @@ impl DirectoryUpdateJob {
         let value = serde_json::from_slice::<Value>(slice)?;
         Ok(value)
     }
-    fn get_existing(
-        &self,
-        user_id: i64,
-        connection: &DatabaseConnection,
-    ) -> anyhow::Result<Option<AcmeDirectory>> {
-        let sql = r#"
-            SELECT * FROM acme_users_directory WHERE user_id = $1;
-            "#;
-        let mut statement = connection.prepare(sql).unwrap();
-        statement.bind((1, user_id))?;
-        Ok(AcmeDirectory::scan_statement(statement).unwrap())
-    }
-    fn get_dir_from_user(&self, connection: &DatabaseConnection) -> anyhow::Result<Option<AcmeDirectory>> {
-        let user = InitializeLocalUserJob::get_user(self.user_id.as_str(), &connection).unwrap();
-        if user.is_none() {
-            return Err(anyhow::anyhow!(
-                "Could not complete directory job since queried user could not be found!"
-            ))?;
-        }
-        let user = user.unwrap();
-        let existing_dir = self.get_existing(user.id, &connection)?;
-        Ok(existing_dir)
-    }
-    fn refresh_if_diff(
-        &self,
-        acme_directory: AcmeDirectoryApi,
-        acme_dir_url: String,
-        connection: &DatabaseConnection,
-    ) -> anyhow::Result<Option<AcmeDirectory>> {
-        let user = InitializeLocalUserJob::get_user(self.user_id.as_str(), &connection).unwrap();
-        if user.is_none() {
-            return Err(anyhow::anyhow!(
-                "Could not complete directory job since queried user could not be found!"
-            ))?;
-        }
-        let user = user.unwrap();
-        let existing_dir = self.get_existing(user.id, &connection)?;
-        let sql;
-        if existing_dir.is_none() {
-            sql = r#"
-            INSERT INTO acme_users_directory(
-                user_id,
-                directory_base_url,
-                new_nonce,
-                new_account,
-                new_order,
-                new_authz,
-                revoke_cert,
-                key_change
-            ) VALUES (?1, ?8, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING *;
-            "#;
-        } else {
-            let existing = existing_dir.unwrap();
-            info!("Existing acme directory found for user_id: {} - directory id: {}", user.id, existing.directory_id);
-            if existing.is_equal_to(&acme_directory) {
-                info!(
-                    "Existing acme directory was found to be up to date - skipping refresh..."
-                );
-                return Ok(Some(existing));
-            }
-            info!("Acme directory found not to be equal to request - refreshing...");
-            sql = self.get_update();
-        }
-        let mut statement = connection.prepare(sql).unwrap();
-        statement.bind((1, user.id))?;
-        statement.bind((2, acme_directory.new_nonce.as_str()))?;
-        statement.bind((3, acme_directory.new_account.as_str()))?;
-        statement.bind((4, acme_directory.new_order.as_str()))?;
-        statement.bind((
-            5,
-            acme_directory.new_authz.unwrap_or("".to_string()).as_str(),
-        ))?;
-        statement.bind((6, acme_directory.revoke_cert.as_str()))?;
-        statement.bind((7, acme_directory.key_change.as_str()))?;
-        statement.bind((8, acme_dir_url.as_str()))?;
-        Ok(AcmeDirectory::scan_statement(statement).unwrap())
-    }
-    fn get_update(&self) -> &'static str {
-        r#"
-        UPDATE acme_users_directory SET
-            directory_base_url = ?8
-            new_nonce = ?2,
-            new_account = ?3,
-            new_order = ?4,
-            new_authz = ?5,
-            revoke_cert = ?6,
-            key_change = ?7
-        WHERE user_id = ?1 RETURNING *;
-        "#
-    }
 }
 
 #[async_trait]
@@ -157,19 +65,19 @@ impl Job for DirectoryUpdateJob {
         }
         let dir: AcmeDirectoryApi;
         let connection = DatabaseConnection::get_connection().unwrap();
-        let result = self.get_dir_from_user(&connection)?;
+        let result = AcmeDirectory::get_dir_from_user(self.user_id.clone(), &connection)?;
         let directory_result: Option<AcmeDirectory>;
         if result.is_none() {
             let url = self.base_url.clone().unwrap();
             let value = self.call_directory(url.clone()).await?;
             dir = from_value(value.clone())?;
-            directory_result = self.refresh_if_diff(dir, url, &connection)?;
+            directory_result = AcmeDirectory::refresh_if_diff(dir, self.user_id.clone(), url, &connection)?;
         } else {
             let result = result.unwrap();
             let url = result.directory_base_url;
             let value = self.call_directory(url.clone()).await?;
             dir = from_value(value.clone())?;
-            directory_result = self.refresh_if_diff(dir, url, &connection)?;
+            directory_result = AcmeDirectory::refresh_if_diff(dir, self.user_id.clone(), url, &connection)?;
         }
         if let Some(dir) = directory_result {
             info!("Directory refresh returned directory with id: {}", dir.directory_id);

@@ -23,7 +23,6 @@ dependencies = [
  "async-trait",
  "clap",
  "common-utils",
- "log",
  "persistence",
  "reqwest 0.13.1",
  "serde",
@@ -992,6 +991,7 @@ name = "persistence"
 version = "0.1.0"
 dependencies = [
  "acme-client",
+ "anyhow",
  "common-utils",
  "sqlite",
  "tracing",
