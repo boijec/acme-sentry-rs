@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AcmeDirectory {
+pub struct AcmeDirectoryApi {
+    #[serde(skip)]
+    pub directory_id: i64,
+    #[serde(skip)]
+    pub user_id: String,
     #[serde(rename = "keyChange")]
     pub key_change: String,
     #[serde(rename = "newAuthz")]

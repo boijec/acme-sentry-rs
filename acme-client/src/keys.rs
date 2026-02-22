@@ -122,7 +122,20 @@ impl PrivateKey {
                 Ok(self.sign_ed(jws_data)?)
             }
         }
+    }
 
+    pub fn get_pem_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+        
+        let a = self.k.ec_key()?.private_key_to_pem()?;
+        Ok(a)
+    }
+
+    pub fn load_private_bytes(pem: &Vec<u8>, supported_key: SupportedKey) -> Result<Self, Box<dyn Error>> {
+        let key = PKey::private_key_from_pem(pem)?;
+        Ok(PrivateKey {
+            kt: supported_key,
+            k: key,
+        })
     }
 
     fn sign_rsa(&self, data: &String) -> Result<Vec<u8>, Box<dyn Error>> {

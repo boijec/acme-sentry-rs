@@ -73,9 +73,11 @@ impl Scheduler {
                 SchedulerMessage::Job(job) => {
                     let job_name = job.job_type();
                     let span = tracing::info_span!("worker", job_name = job_name);
+                    span.follows_from(tracing::Span::current());
                     let job_result = job.execute(handle.clone()).instrument(span).await;
                     if job_result.is_err() {
-                        error!("Failed to execute job");
+                        let e = job_result.unwrap_err();
+                        error!("Failed to execute job: {:?}", e);
                     }
                 }
                 SchedulerMessage::Shutdown(ack) => {
@@ -85,9 +87,11 @@ impl Scheduler {
                         if let SchedulerMessage::Job(job) = msg {
                             let job_name = job.job_type();
                             let span = tracing::info_span!("worker-cleanup", job_name = job_name);
+                            span.follows_from(tracing::Span::current());
                             let job_result = job.execute(handle.clone()).instrument(span).await;
                             if job_result.is_err() {
-                                error!("Failed to execute job");
+                                let e = job_result.unwrap_err();
+                                error!("Failed to execute job: {:?}", e);
                             }
                         }
                     }

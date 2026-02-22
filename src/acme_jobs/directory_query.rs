@@ -1,22 +1,28 @@
+use crate::acme_jobs::initialize_keys_for_user::InitializeLocalUserJob;
 use crate::job_execution::job_base::{Job, SchedulerHandle};
-use acme_client::comms::directory::AcmeDirectory;
+use acme_client::comms::directory::AcmeDirectoryApi;
 use async_trait::async_trait;
+use persistence::data_model::AcmeDirectory;
 use persistence::database::DatabaseConnection;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
 use std::error::Error;
-use tracing::{info, instrument, trace};
+use tracing::{info, instrument};
 
 #[derive(Serialize, Deserialize)]
 pub struct DirectoryQueryJob {
     pub base_url: String,
+    pub user_id: String,
 }
 impl DirectoryQueryJob {
-    pub fn new(base_url: String) -> Result<DirectoryQueryJob, Box<dyn Error>> {
-        let x = base_url.to_owned() + "/dir";
-        let _ = Url::parse(x.as_str())?;
-        Ok(DirectoryQueryJob { base_url: x.to_string() })
+    pub fn new(base_url: Option<String>, user_id: String) -> Result<Self, Box<dyn Error>> {
+        if let Some(base_url) = base_url {
+            let x = base_url.to_owned() + "/dir";
+            let _ = Url::parse(x.as_str())?;
+            return Ok(DirectoryQueryJob { base_url: x.to_string(), user_id })
+        }
+        Err("Acme CA base url could not be parsed!".into())
     }
     async fn call_directory(&self) -> anyhow::Result<Value> {
         let client = reqwest::Client::builder()
@@ -31,11 +37,15 @@ impl DirectoryQueryJob {
         info!("{}", value);
         Ok(value)
     }
-    fn insert_dir_in_db(&self, acme_directory: AcmeDirectory) -> anyhow::Result<()> {
+    fn insert_dir_in_db(&self, acme_directory: AcmeDirectoryApi) -> anyhow::Result<Option<AcmeDirectory>> {
         let connection = DatabaseConnection::get_connection().unwrap();
+        let user = InitializeLocalUserJob::get_user(self.user_id.as_str(), &connection).unwrap();
+        if user.is_none() {
+            return Err(anyhow::anyhow!("Could not complete directory job since queried user could not be found!"))?;
+        }
+        let user = user.unwrap();
         let sql = r#"
             INSERT INTO acme_users_directory(
-                directory_id,
                 user_id,
                 new_nonce,
                 new_account,
@@ -43,19 +53,17 @@ impl DirectoryQueryJob {
                 new_authz,
                 revoke_cert,
                 key_change
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING *;
             "#;
         let mut statement = connection.prepare(sql).unwrap();
-        statement.bind((1, 1))?;
-        statement.bind((2, 1))?;
-        statement.bind((3, acme_directory.new_nonce.as_str()))?;
-        statement.bind((4, acme_directory.new_account.as_str()))?;
-        statement.bind((5, acme_directory.new_order.as_str()))?;
-        statement.bind((6, ""))?;
-        statement.bind((7, acme_directory.revoke_cert.as_str()))?;
-        statement.bind((8, acme_directory.key_change.as_str()))?;
-        statement.next()?;
-        Ok(())
+        statement.bind((1, user.id))?;
+        statement.bind((2, acme_directory.new_nonce.as_str()))?;
+        statement.bind((3, acme_directory.new_account.as_str()))?;
+        statement.bind((4, acme_directory.new_order.as_str()))?;
+        statement.bind((5, ""))?;
+        statement.bind((6, acme_directory.revoke_cert.as_str()))?;
+        statement.bind((7, acme_directory.key_change.as_str()))?;
+        Ok(Some(AcmeDirectory::scan_statement(statement).unwrap()))
     }
 }
 
@@ -70,8 +78,11 @@ impl Job for DirectoryQueryJob {
     #[instrument(level = "trace", name = "directory_query_job", fields(job_name = %self.job_type()), skip_all)]
     async fn execute(&self, _scheduler: SchedulerHandle) -> anyhow::Result<()> {
         let value = self.call_directory().await?;
-        let dir: AcmeDirectory = from_value(value.clone())?;
-        self.insert_dir_in_db(dir)?;
+        let dir: AcmeDirectoryApi = from_value(value.clone())?;
+        let t = self.insert_dir_in_db(dir)?;
+        if let Some(dir) = t {
+            info!("Directory successfully inserted! {}", dir.directory_id);
+        }
         Ok(())
     }
 }
