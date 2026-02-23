@@ -14,16 +14,14 @@ pub struct DatabaseConnection {
 enum PreFlightCheckList {
     AcmeUsersTable,
     AcmeUserDirectory,
-    AcmeUserOrders,
-    AcmeUserCertificates,
+    AcmeAccountLinks,
+    AcmeOrders,
+    AcmeDnsChallenges,
+    AcmeCertificates,
 }
 #[derive(Debug)]
 enum SqliteSettings {
     ForeignKeysEnabled,
-}
-#[derive(Debug)]
-enum KeyOperations {
-    GetKeyFromKeyId,
 }
 
 trait SqlStatement {
@@ -46,16 +44,15 @@ impl Display for PreFlightCheckList {
         write!(f, "{:?}", self)
     }
 }
-impl Display for KeyOperations {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
 impl EnumIterator<PreFlightCheckList> for PreFlightCheckList {
     fn iterator() -> Iter<'static, PreFlightCheckList> {
         static PRE_FLIGHT_CHECK_LIST: &[PreFlightCheckList] = &[
             PreFlightCheckList::AcmeUsersTable,
             PreFlightCheckList::AcmeUserDirectory,
+            PreFlightCheckList::AcmeAccountLinks,
+            PreFlightCheckList::AcmeOrders,
+            PreFlightCheckList::AcmeDnsChallenges,
+            PreFlightCheckList::AcmeCertificates,
         ];
         PRE_FLIGHT_CHECK_LIST.iter()
     }
@@ -96,8 +93,56 @@ impl SqlStatement for PreFlightCheckList {
                 )
             "#
             }
-            PreFlightCheckList::AcmeUserOrders => r#"dudde"#,
-            PreFlightCheckList::AcmeUserCertificates => r#"dudde"#,
+            PreFlightCheckList::AcmeAccountLinks => {
+                r#"
+                CREATE TABLE IF NOT EXISTS acme_account_links(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    account_url TEXT(512) NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES acme_users(id) ON DELETE RESTRICT
+                );
+            "#
+            }
+            PreFlightCheckList::AcmeOrders => {
+                r#"
+                CREATE TABLE IF NOT EXISTS acme_orders(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    domain TEXT(256) NOT NULL,
+                    order_url TEXT(512),
+                    authorization_url TEXT(512),
+                    finalize_url TEXT(512),
+                    certificate_url TEXT(512),
+                    status TEXT(32) NOT NULL DEFAULT 'pending',
+                    created_at TEXT(32) NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES acme_users(id) ON DELETE RESTRICT
+                );
+            "#
+            }
+            PreFlightCheckList::AcmeDnsChallenges => {
+                r#"
+                CREATE TABLE IF NOT EXISTS acme_dns_challenges(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    order_id INTEGER NOT NULL,
+                    token TEXT(512) NOT NULL,
+                    key_authorization TEXT(1024) NOT NULL,
+                    dns_record_name TEXT(512) NOT NULL,
+                    status TEXT(32) NOT NULL DEFAULT 'pending',
+                    FOREIGN KEY (order_id) REFERENCES acme_orders(id) ON DELETE RESTRICT
+                );
+            "#
+            }
+            PreFlightCheckList::AcmeCertificates => {
+                r#"
+                CREATE TABLE IF NOT EXISTS acme_certificates(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    order_id INTEGER NOT NULL,
+                    certificate_path TEXT(256) NOT NULL,
+                    downloaded_at TEXT(32) NOT NULL,
+                    FOREIGN KEY (order_id) REFERENCES acme_orders(id) ON DELETE RESTRICT
+                );
+            "#
+            }
         }
     }
 }
