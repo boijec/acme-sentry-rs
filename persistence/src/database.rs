@@ -8,8 +8,6 @@ use tracing::{debug, info};
 pub struct DatabaseConnection {
     connection: sqlite::Connection
 }
-// TODO: remove allow
-#[allow(dead_code)]
 #[derive(Debug)]
 enum PreFlightCheckList {
     AcmeUsersTable,
