@@ -1,46 +1,70 @@
 use crate::job_execution::job_base::{Job, SchedulerHandle};
+use acme_client::comms::account::AcmeAccountClient;
+use acme_client::crypto::SupportedKey;
+use acme_client::keys::PrivateKey;
 use async_trait::async_trait;
+use persistence::account_link::AcmeAccountLink;
 use persistence::database::DatabaseConnection;
 use persistence::directory::AcmeDirectory;
 use persistence::user::AcmeUser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::{debug, info};
+use tracing::info;
 
 #[derive(Serialize, Deserialize)]
 pub struct LoginUserJob {
     pub user_id: String,
 }
+
 impl LoginUserJob {
     pub fn new(user_id: String) -> Self {
         LoginUserJob { user_id }
     }
-    fn log_in(&self, dir: AcmeDirectory, user_id: String, base_path: String) -> anyhow::Result<()> {
-        debug!("Will attempt to fetch key from {}/{}.pem", base_path, user_id);
-
-        Ok(())
-    }
 }
+
 #[async_trait]
 impl Job for LoginUserJob {
     fn job_type(&self) -> &'static str {
         "login-user-job"
     }
+
     fn payload(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
-    async fn execute(&self, handle: SchedulerHandle) -> anyhow::Result<()> {
-        let connection = DatabaseConnection::get_connection().unwrap();
-        let user = AcmeUser::get_user(self.user_id.as_str(), &connection).unwrap();
-        if user.is_none() {
-            return Err(anyhow::anyhow!(
-                "Could not complete directory job since queried user could not be found!"
+
+    async fn execute(&self, _handle: SchedulerHandle) -> anyhow::Result<()> {
+        let connection = DatabaseConnection::get_connection()
+            .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
+
+        let user = AcmeUser::get_user(self.user_id.as_str(), &connection)
+            .map_err(|e| anyhow::anyhow!("Failed to look up user: {}", e))?
+            .ok_or_else(|| anyhow::anyhow!(
+                "Could not complete login job since queried user could not be found!"
             ))?;
-        }
-        let user = user.unwrap();
-        let result = AcmeDirectory::get_existing(user.id, &connection)?;
-        let result = result.unwrap();
-        self.log_in(result, user.user_id, user.key_path)?;
+
+        let dir = AcmeDirectory::get_existing(user.id, &connection)?
+            .ok_or_else(|| anyhow::anyhow!("No ACME directory found for user '{}'", self.user_id))?;
+
+        // TODO: this is fucked.. fix
+        let pem_bytes = std::fs::read(&user.key_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read PEM from '{}': {}", user.key_path, e))?;
+        let supported_key = SupportedKey::from_str(&user.key_type)
+            .map_err(|e| anyhow::anyhow!("Unsupported key type '{}': {}", user.key_type, e))?;
+        let private_key = PrivateKey::load_private_bytes(&pem_bytes, supported_key)
+            .map_err(|e| anyhow::anyhow!("Failed to load private key: {}", e))?;
+
+        let account_url = AcmeAccountClient::login_or_register(
+            &private_key,
+            &dir.new_nonce,
+            &dir.new_account,
+            true, // TODO: configure via application config
+        )
+        .await?;
+
+        AcmeAccountLink::upsert_for_user_id(self.user_id.as_str(), &account_url, &connection)
+            .map_err(|e| anyhow::anyhow!("Failed to persist account link: {}", e))?;
+
+        info!("Account link persisted for user '{}'.", self.user_id);
         Ok(())
     }
 }

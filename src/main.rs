@@ -1,4 +1,5 @@
 mod acme_jobs;
+mod http_server;
 mod job_execution;
 mod statics;
 
@@ -8,6 +9,7 @@ use crate::acme_jobs::initialize_keys_for_user::InitializeLocalUserJob;
 use crate::acme_jobs::login_user::LoginUserJob;
 use crate::job_execution::job_base::Scheduler;
 use crate::statics::{Args, YamlConfig};
+use actix_web::{App, HttpServer, web};
 use clap::{Parser, crate_version};
 use common_utils::{APPLICATION_CONFIG, ApplicationConfig, InternalIdTooling};
 use std::error::Error;
@@ -40,13 +42,40 @@ async fn async_main() -> Result<(), Box<dyn Error>> {
     handle
         .submit(LoginUserJob::new(config.user_id.clone()))
         .await?;
+    handle
+        .submit(DirectoryUpdateJob::new(
+            None,
+            config.user_id.clone(),
+        )?)
+        .await?;
     if config.application_mode {
         info!("Application mode has been enabled, monitoring input signals.");
+        // TODO: add to yaml config / args params
+        let bind_addr = "0.0.0.0:8080";
+        let scheduler_data = web::Data::new(handle.clone());
+        let server = HttpServer::new(move || {
+            App::new()
+                .app_data(scheduler_data.clone())
+                .route("/orders", web::post().to(http_server::post_new_order))
+        })
+        .workers(2)
+        .bind(bind_addr)
+        .map_err(|e| format!("Failed to bind HTTP server to {}: {}", bind_addr, e))?
+        .run();
+        let server_handle = server.handle();
+        let srv_task = tokio::spawn(server);
+        info!("HTTP server listening on {}", bind_addr);
         let mut h = handle.clone();
         tokio::select! {
-            _ = tokio::signal::ctrl_c() => { h.shutdown().await; }
-            _ = h.wait_for_shutdown() => {}
+            _ = tokio::signal::ctrl_c() => {
+                server_handle.stop(true).await;
+                h.shutdown().await;
+            }
+            _ = h.wait_for_shutdown() => {
+                server_handle.stop(true).await;
+            }
         }
+        let _ = srv_task.await;
         Ok(())
     } else {
         info!("Single shot mode enabled - application will shut down right now!");
