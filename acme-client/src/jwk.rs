@@ -17,25 +17,6 @@ pub struct GenericJWK {
     e: Option<String>,
     n: Option<String>,
 }
-pub struct RsaJWK {
-    pub alg: SupportedAlgorithm,
-    pub kty: SupportedKey,
-    pub e: String,
-    pub n: String,
-}
-pub struct EcJWK {
-    pub alg: SupportedAlgorithm,
-    pub kty: SupportedKey,
-    pub crv: String,
-    pub x: String,
-    pub y: String,
-}
-pub struct EdJWK {
-    pub alg: SupportedAlgorithm,
-    pub kty: SupportedKey,
-    pub crv: String,
-    pub x: String,
-}
 impl GenericJWK {
     pub fn from_value(jwk: Value) -> Result<Self, Box<dyn Error>> {
         Ok(serde_json::from_value(jwk)?)

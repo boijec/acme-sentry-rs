@@ -164,6 +164,11 @@ pub enum SupportedHash {
     SHA512 // SHA512 is also for EdDSA
 }
 
+pub fn sha256_b64(data: &[u8]) -> String {
+    use crate::encoding::encode_b64;
+    encode_b64(&sha256(data))
+}
+
 impl SupportedHash {
     pub fn hash(&self, hash_data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         match self {

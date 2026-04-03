@@ -138,6 +138,14 @@ impl PrivateKey {
         })
     }
 
+    pub fn jwk_thumbprint(&self) -> Result<String, Box<dyn Error>> {
+        use crate::crypto::SupportedHash;
+        let jwk = self.get_jwk()?;
+        let canonical = canonical_jwk_string(&jwk)?;
+        let hash = SupportedHash::SHA256.hash(canonical.as_bytes())?;
+        Ok(encode_b64(&hash))
+    }
+
     fn sign_rsa(&self, data: &String) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut signer = Signer::new(self.kt.get_key_alg().get_hash().get_digest(), &self.k)?;
         Ok(signer.sign_oneshot_to_vec(data.as_bytes())?)
@@ -173,4 +181,30 @@ pub(crate) fn gen_ec(ec_type: &SupportedKey) -> Result<PKey<Private>, Box<dyn Er
 
 pub(crate) fn gen_ed() -> Result<PKey<Private>, Box<dyn Error>> {
     Ok(PKey::generate_ed25519()?)
+}
+
+fn canonical_jwk_string(jwk: &serde_json::Value) -> Result<String, Box<dyn Error>> {
+    let kty = jwk["kty"].as_str().ok_or("JWK missing kty")?;
+    match kty {
+        "EC" => Ok(format!(
+            r#"{{"crv":"{}","kty":"{}","x":"{}","y":"{}"}}"#,
+            jwk["crv"].as_str().ok_or("EC JWK missing crv")?,
+            kty,
+            jwk["x"].as_str().ok_or("EC JWK missing x")?,
+            jwk["y"].as_str().ok_or("EC JWK missing y")?,
+        )),
+        "RSA" => Ok(format!(
+            r#"{{"e":"{}","kty":"{}","n":"{}"}}"#,
+            jwk["e"].as_str().ok_or("RSA JWK missing e")?,
+            kty,
+            jwk["n"].as_str().ok_or("RSA JWK missing n")?,
+        )),
+        "OKP" => Ok(format!(
+            r#"{{"crv":"{}","kty":"{}","x":"{}"}}"#,
+            jwk["crv"].as_str().ok_or("OKP JWK missing crv")?,
+            kty,
+            jwk["x"].as_str().ok_or("OKP JWK missing x")?,
+        )),
+        other => Err(format!("Unsupported JWK kty '{}' for thumbprint", other).into()),
+    }
 }
