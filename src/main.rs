@@ -2,6 +2,7 @@ mod acme_jobs;
 mod http_server;
 mod job_execution;
 mod statics;
+mod plugin_engine;
 
 use crate::acme_jobs::db_initialization::DbInitializationJob;
 use crate::acme_jobs::directory_query::DirectoryUpdateJob;
@@ -15,12 +16,18 @@ use common_utils::{APPLICATION_CONFIG, ApplicationConfig, InternalIdTooling};
 use std::error::Error;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::{env, fs};
+use std::{env, fs, thread};
+use std::time::Duration;
+use acme_sentry_plugin_sdk_rs::loader::load_plugin;
 use tracing::{Instrument, Span, error, info, info_span};
+use crate::plugin_engine::checkers::check_plugins_directory;
+use crate::plugin_engine::run_mode::DiscoveryType;
 
 async fn async_main() -> Result<(), Box<dyn Error>> {
     let (scheduler, handle) = Scheduler::new(32);
     let config = APPLICATION_CONFIG.get().unwrap();
+    let discovery_type = check_plugins_directory(config.acme_challenge_plugin.as_str())
+        .map_err(|e| Box::new(e)).unwrap();
     DirectoryUpdateJob::validate_url(Some(config.base_url.clone()))?;
     let scheduler_span = info_span!("scheduler", user_id = config.user_id);
     scheduler_span.follows_from(Span::current());

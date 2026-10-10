@@ -19,6 +19,7 @@ tracing-subscriber = "0.3.22"
 sqlite = "0.37.0"
 serde_yaml = "0.9.34"
 actix-web = "4"
+acme-sentry-plugin-sdk-rs = { version = "0.1.0", path = "../acme-sentry-plugin-sdk-rs" }
 
 [workspace]
 resolver = "3"

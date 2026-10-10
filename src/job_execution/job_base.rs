@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot, watch};
-use tracing::{error, info, instrument, trace, warn, Instrument, Span};
+use tracing::{error, info, instrument, warn, Instrument};
 
 #[async_trait]
 pub trait Job: Send + 'static {

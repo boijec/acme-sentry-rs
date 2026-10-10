@@ -17,10 +17,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "acme-sentry-plugin-sdk-rs"
+version = "0.1.0"
+
+[[package]]
 name = "acme-sentry-rs"
 version = "0.1.0"
 dependencies = [
  "acme-client",
+ "acme-sentry-plugin-sdk-rs",
  "actix-web",
  "anyhow",
  "async-trait",

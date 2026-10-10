@@ -18,6 +18,7 @@ pub struct ApplicationConfig {
     pub user_email: String,
     pub key_type: String,
     pub logging_level: Option<Level>,
+    pub acme_challenge_plugin: String,
 }
 
 pub static APPLICATION_CONFIG: OnceLock<ApplicationConfig> = OnceLock::new();
