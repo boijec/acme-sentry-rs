@@ -1,33 +1,29 @@
 mod acme_jobs;
 mod http_server;
 mod job_execution;
-mod statics;
 mod plugin_engine;
+mod statics;
 
 use crate::acme_jobs::db_initialization::DbInitializationJob;
 use crate::acme_jobs::directory_query::DirectoryUpdateJob;
 use crate::acme_jobs::initialize_keys_for_user::InitializeLocalUserJob;
 use crate::acme_jobs::login_user::LoginUserJob;
 use crate::job_execution::job_base::Scheduler;
+use crate::plugin_engine::checkers::check_plugins_directory;
 use crate::statics::{Args, YamlConfig};
 use actix_web::{App, HttpServer, web};
+use anyhow::anyhow;
 use clap::{Parser, crate_version};
 use common_utils::{APPLICATION_CONFIG, ApplicationConfig, InternalIdTooling};
 use std::error::Error;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::{env, fs, thread};
-use std::time::Duration;
-use acme_sentry_plugin_sdk_rs::loader::load_plugin;
+use std::{env, fs};
 use tracing::{Instrument, Span, error, info, info_span};
-use crate::plugin_engine::checkers::check_plugins_directory;
-use crate::plugin_engine::run_mode::DiscoveryType;
 
 async fn async_main() -> Result<(), Box<dyn Error>> {
     let (scheduler, handle) = Scheduler::new(32);
     let config = APPLICATION_CONFIG.get().unwrap();
-    let discovery_type = check_plugins_directory(config.acme_challenge_plugin.as_str())
-        .map_err(|e| Box::new(e)).unwrap();
     DirectoryUpdateJob::validate_url(Some(config.base_url.clone()))?;
     let scheduler_span = info_span!("scheduler", user_id = config.user_id);
     scheduler_span.follows_from(Span::current());
@@ -50,10 +46,7 @@ async fn async_main() -> Result<(), Box<dyn Error>> {
         .submit(LoginUserJob::new(config.user_id.clone()))
         .await?;
     handle
-        .submit(DirectoryUpdateJob::new(
-            None,
-            config.user_id.clone(),
-        )?)
+        .submit(DirectoryUpdateJob::new(None, config.user_id.clone())?)
         .await?;
     if config.application_mode {
         info!("Application mode has been enabled, monitoring input signals.");
@@ -64,6 +57,7 @@ async fn async_main() -> Result<(), Box<dyn Error>> {
             App::new()
                 .app_data(scheduler_data.clone())
                 .route("/orders", web::post().to(http_server::post_new_order))
+                .route("/account", web::get().to(http_server::check_account_status))
         })
         .workers(2)
         .bind(bind_addr)
@@ -110,29 +104,36 @@ fn main() {
         .expect("Tokio runtime panicked with error:");
 }
 
-fn handle_mode(args: Args) -> Result<(bool, bool), Box<dyn Error>> {
+fn handle_mode(args: Args) -> anyhow::Result<(bool, bool), anyhow::Error> {
     if args.application_mode {
         if args.yaml_config.is_none() {
             error!("YAML configuration option is required for this mode");
-            return Err("Yaml config parameter, not present in input parameter".into());
+            return Err(anyhow!(
+                "Yaml config parameter, not present in input parameter"
+            ));
         }
         return Ok((true, true));
     }
     if args.yaml {
         if args.yaml_config.is_none() {
             error!("YAML configuration option is required for this mode");
-            return Err("Yaml config parameter, not present in input parameter".into());
+            return Err(anyhow!(
+                "Yaml config parameter, not present in input parameter"
+            ));
         }
         return Ok((true, false));
     }
     Ok((false, false))
 }
 
-fn write_application_config(args: Args) -> Result<(), Box<dyn Error>> {
+fn write_application_config(args: Args) -> anyhow::Result<()> {
     let (yaml_mode, application_mode) = handle_mode(args.clone())?;
     if yaml_mode {
         let yaml_file = fs::read_to_string(PathBuf::from_str(args.yaml_config.unwrap().as_str())?)?;
         let yaml_config: YamlConfig = serde_yaml::from_str(&yaml_file)?;
+        let plugin_dir = yaml_config.acme_sentry_configuration.fs.acme_plugin;
+        let discovery_type =
+            check_plugins_directory(plugin_dir.as_str()).map_err(|e| anyhow!("{:?}", e))?;
         let config = ApplicationConfig {
             application_mode,
             user_id: yaml_config
@@ -144,6 +145,8 @@ fn write_application_config(args: Args) -> Result<(), Box<dyn Error>> {
             key_type: yaml_config.acme_sentry_configuration.user.key_type,
             logging_level: yaml_config.acme_sentry_configuration.logging.logging_level,
             base_dir: yaml_config.acme_sentry_configuration.fs.base_dir.clone(),
+            acme_challenge_plugin: plugin_dir,
+            discovery_type: discovery_type.as_str().to_string(),
             output_dir: PathBuf::from_str(
                 yaml_config.acme_sentry_configuration.fs.base_dir.as_str(),
             )?
@@ -156,6 +159,12 @@ fn write_application_config(args: Args) -> Result<(), Box<dyn Error>> {
         APPLICATION_CONFIG.set(config).unwrap();
     } else {
         let email = args.with_email;
+        if args.with_challenge_plugins.is_none() {
+            return Err(anyhow!("Challenge plugin configuration is required for this mode"));
+        }
+        let plugin_dir = args.with_challenge_plugins.unwrap();
+        let discovery_type =
+            check_plugins_directory(plugin_dir.as_str()).map_err(|e| anyhow!("{:?}", e))?;
         let config = ApplicationConfig {
             application_mode,
             user_id: args
@@ -165,6 +174,8 @@ fn write_application_config(args: Args) -> Result<(), Box<dyn Error>> {
             key_type: args.requested_login_key_type,
             logging_level: Some(args.logging_level),
             base_dir: args.base_dir.clone(),
+            acme_challenge_plugin: plugin_dir,
+            discovery_type: discovery_type.as_str().to_string(),
             output_dir: PathBuf::from_str(args.base_dir.as_str())?
                 .join(args.output_dir.as_str())
                 .to_str()

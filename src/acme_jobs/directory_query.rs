@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{from_value, Value};
 use std::error::Error;
 use tracing::{info, instrument};
+use acme_client::comms::request::build_client;
 
 #[derive(Serialize, Deserialize)]
 pub struct DirectoryUpdateJob {
@@ -37,11 +38,12 @@ impl DirectoryUpdateJob {
         Err("Acme CA base url could not be parsed!".into())
     }
     async fn call_directory(&self, base_url: String) -> anyhow::Result<Value> {
-        let client = reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()?;
-        info!("Calling ACME directory");
-        let response = client.get(base_url.as_str()).send().await?;
+        let client = build_client(true)?;
+        info!("Calling ACME directory at: {}", base_url);
+        let response = client
+            .get(base_url.as_str())
+            .send()
+            .await?;
         info!("ACME directory returned response: {}", response.status());
         let bytes = response.bytes().await?;
         let slice = bytes.iter().as_slice();

@@ -24,6 +24,8 @@ pub struct Args {
     pub base_dir: String,
     #[arg(long, default_value = "out", help = "Output directory of generated files")]
     pub output_dir: String,
+    #[arg(long, help = "Absolute path to acme challenge plugin file in .so format")]
+    pub with_challenge_plugins: Option<String>,
     #[arg(long, help = "User id that acme-sentry shall persist reference to if this is not present, acme-sentry will generate a new user")]
     pub with_user_id: Option<String>,
     #[arg(long, help = "Email that acme-sentry shall try to connect with the user")]
@@ -47,6 +49,8 @@ pub struct AcmeSentryConfiguration {
 pub struct FsConfig {
     #[serde(rename = "base-dir")]
     pub base_dir: String,
+    #[serde(rename = "acme-challenge-plugin")]
+    pub acme_plugin: String,
     #[serde(rename = "output-dir")]
     pub output_dir: String,
 }

@@ -6,6 +6,7 @@ use openssl::pkey::{PKey, Public};
 use serde_json::{json, Value};
 use std::error::Error;
 use tracing::{debug, info, warn};
+use crate::comms::request::build_client;
 
 #[derive(Debug)]
 pub struct PlaceOrderResult {
@@ -59,9 +60,7 @@ impl AcmeAccountClient {
         account_url: String,
         accept_invalid_certs: bool,
     ) -> Result<Self, Box<dyn Error>> {
-        let http = reqwest::Client::builder()
-            .danger_accept_invalid_certs(accept_invalid_certs)
-            .build()?;
+        let http = build_client(accept_invalid_certs)?;
         Ok(AcmeAccountClient {
             private_key,
             account_url,
@@ -75,9 +74,7 @@ impl AcmeAccountClient {
         new_account_url: &str,
         accept_invalid_certs: bool,
     ) -> anyhow::Result<String> {
-        let http = reqwest::Client::builder()
-            .danger_accept_invalid_certs(accept_invalid_certs)
-            .build()?;
+        let http = build_client(accept_invalid_certs)?;
 
         let nonce = fetch_nonce(new_nonce_url, &http).await?;
         let alg = private_key.kt.get_key_alg();
@@ -516,14 +513,15 @@ fn build_jws_body_kid_post_as_get(protected: Value, key: &PrivateKey) -> anyhow:
 }
 
 async fn fetch_nonce(nonce_url: &str, http: &reqwest::Client) -> anyhow::Result<String> {
+    debug!("Fetching nonce at: {}", nonce_url);
     let resp = http
         .head(nonce_url)
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to fetch nonce from '{}': {}", nonce_url, e))?;
     resp.headers()
-        .get("Replay-Nonce")
-        .ok_or_else(|| anyhow::anyhow!("Server did not return a Replay-Nonce header"))?
+        .get("replay-nonce")
+        .ok_or_else(|| anyhow::anyhow!("Server did not return a replay-nonce header"))?
         .to_str()
         .map(|s| s.to_owned())
         .map_err(|e| anyhow::anyhow!("Invalid Replay-Nonce header value: {}", e))

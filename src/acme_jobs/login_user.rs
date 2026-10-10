@@ -45,9 +45,10 @@ impl Job for LoginUserJob {
         let dir = AcmeDirectory::get_existing(user.id, &connection)?
             .ok_or_else(|| anyhow::anyhow!("No ACME directory found for user '{}'", self.user_id))?;
 
-        // TODO: this is fucked.. fix
-        let pem_bytes = std::fs::read(&user.key_path)
-            .map_err(|e| anyhow::anyhow!("Failed to read PEM from '{}': {}", user.key_path, e))?;
+        // TODO: export to separate function and use where key needs to be fetched, for posteriors sake
+        let key_path = user.key_path.clone() + "/" + user.user_id.as_str() + ".pem";
+        let pem_bytes = std::fs::read(&key_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read PEM from '{}': {}", key_path, e))?;
         let supported_key = SupportedKey::from_str(&user.key_type)
             .map_err(|e| anyhow::anyhow!("Unsupported key type '{}': {}", user.key_type, e))?;
         let private_key = PrivateKey::load_private_bytes(&pem_bytes, supported_key)

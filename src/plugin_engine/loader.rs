@@ -44,6 +44,7 @@ extern "C" fn should_cancel_impl(state: *mut ()) -> bool {
 pub fn run_plugin(
     str_path: String,
     discovery_type: DiscoveryType,
+    run_mode: RunMode,
 ) -> Result<(), PluginEngineError> {
     match discovery_type {
         DiscoveryType::Directory => {
@@ -54,13 +55,13 @@ pub fn run_plugin(
             };
 
             for entry in entries.flatten() {
-                load(&entry.path(), UnloadPolicy::Unload, RunMode::Set)
+                load(&entry.path(), UnloadPolicy::Unload, run_mode.clone())
             }
             Ok(())
-        }
+        },
         DiscoveryType::SoloPlugin => {
             let path = Path::new(&str_path);
-            load(&path, UnloadPolicy::Unload, RunMode::Set);
+            load(&path, UnloadPolicy::Unload, run_mode);
             Ok(())
         }
     }
