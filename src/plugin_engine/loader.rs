@@ -29,6 +29,12 @@ extern "C" fn log_impl(state: *mut (), msg: FfiStr) {
         .send(PluginEvent::Log(msg.as_str().to_owned()));
 }
 
+pub struct SetConfig {
+    pub acme_token: String,
+    pub domain: String,
+    pub record_name: String,
+}
+
 #[allow(unused)]
 static HOST_VTABLE: HostVTable = HostVTable {
     log: log_impl,
@@ -45,6 +51,7 @@ pub fn run_plugin(
     str_path: String,
     discovery_type: DiscoveryType,
     run_mode: RunMode,
+    set_config: &SetConfig
 ) -> Result<(), PluginEngineError> {
     match discovery_type {
         DiscoveryType::Directory => {
@@ -55,19 +62,19 @@ pub fn run_plugin(
             };
 
             for entry in entries.flatten() {
-                load(&entry.path(), UnloadPolicy::Unload, run_mode.clone())
+                load(&entry.path(), UnloadPolicy::Unload, run_mode.clone(), set_config)
             }
             Ok(())
-        },
+        }
         DiscoveryType::SoloPlugin => {
             let path = Path::new(&str_path);
-            load(&path, UnloadPolicy::Unload, run_mode);
+            load(&path, UnloadPolicy::Unload, run_mode, set_config);
             Ok(())
         }
     }
 }
 
-fn load(path: &Path, policy: UnloadPolicy, run_mode: RunMode) {
+fn load(path: &Path, policy: UnloadPolicy, run_mode: RunMode, run_config: &SetConfig) {
     if path.extension().and_then(|ext| ext.to_str()) != Some("so") {
         return;
     }
@@ -76,16 +83,20 @@ fn load(path: &Path, policy: UnloadPolicy, run_mode: RunMode) {
         Err(_) => return,
     };
     info!("Running plugin: === {} ===", plugin.name().to_uppercase());
-    let config = HostValue::map(vec![("url", HostValue::str("https://test.com"))]);
+    let config = HostValue::map(vec![
+        ("domain", HostValue::str(run_config.domain.as_str())),
+        ("acme_token", HostValue::str(run_config.acme_token.as_str())),
+        ("record_name", HostValue::str(run_config.record_name.as_str())),
+    ]);
     let (rx, _cancel_flag, worker) = run_in_sub_task(plugin, config, run_mode);
     for event in rx {
         match event {
-            PluginEvent::Log(msg) => println!("[PLUGIN_ENGINE]: {}", msg),
+            PluginEvent::Log(msg) => info!("[PLUGIN_ENGINE]: {}", msg),
             PluginEvent::Finished(Ok(val)) => {
-                println!("[PLUGIN_ENGINE]: {}", val.as_str().unwrap());
+                info!("[PLUGIN_ENGINE]: {}", val.as_str().unwrap());
             }
             PluginEvent::Finished(Err(err)) => {
-                println!("[PLUGIN_ENGINE]: {}", err);
+                info!("[PLUGIN_ENGINE]: {}", err);
             }
         }
     }

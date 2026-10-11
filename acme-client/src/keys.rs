@@ -167,7 +167,17 @@ impl PrivateKey {
     }
 }
 
-
+/// Returns either a private key instance, or an anyhow error describing
+pub fn load_private_key(user_id: &str, key_path: &str, key_type: &str) -> anyhow::Result<PrivateKey> {
+    let absolute_key_path = key_path.to_owned() + "/" + user_id + ".pem";
+    let pem_bytes = std::fs::read(absolute_key_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read PEM: {}", e))?;
+    let supported_key = SupportedKey::from_str(key_type)
+        .map_err(|e| anyhow::anyhow!("Unsupported key type: {}", e))?;
+    let private_key = PrivateKey::load_private_bytes(&pem_bytes, supported_key)
+        .map_err(|e| anyhow::anyhow!("Failed to load private key: {}", e))?;
+    Ok(private_key)
+}
 
 pub(crate) fn gen_rsa(key_length: u32) -> Result<PKey<Private>, Box<dyn Error>> {
     let rsa = Rsa::generate(key_length)?;

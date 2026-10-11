@@ -1,7 +1,7 @@
 use crate::job_execution::job_base::{Job, SchedulerHandle};
 use acme_client::comms::account::AcmeAccountClient;
 use acme_client::crypto::SupportedKey;
-use acme_client::keys::PrivateKey;
+use acme_client::keys::{load_private_key, PrivateKey};
 use async_trait::async_trait;
 use persistence::account_link::AcmeAccountLink;
 use persistence::database::DatabaseConnection;
@@ -46,13 +46,7 @@ impl Job for LoginUserJob {
             .ok_or_else(|| anyhow::anyhow!("No ACME directory found for user '{}'", self.user_id))?;
 
         // TODO: export to separate function and use where key needs to be fetched, for posteriors sake
-        let key_path = user.key_path.clone() + "/" + user.user_id.as_str() + ".pem";
-        let pem_bytes = std::fs::read(&key_path)
-            .map_err(|e| anyhow::anyhow!("Failed to read PEM from '{}': {}", key_path, e))?;
-        let supported_key = SupportedKey::from_str(&user.key_type)
-            .map_err(|e| anyhow::anyhow!("Unsupported key type '{}': {}", user.key_type, e))?;
-        let private_key = PrivateKey::load_private_bytes(&pem_bytes, supported_key)
-            .map_err(|e| anyhow::anyhow!("Failed to load private key: {}", e))?;
+        let private_key = load_private_key(&user.user_id, &user.key_path, &user.key_type)?;
 
         let account_url = AcmeAccountClient::login_or_register(
             &private_key,

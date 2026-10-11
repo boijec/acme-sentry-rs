@@ -5,8 +5,10 @@ use crate::keys::PrivateKey;
 use openssl::pkey::{PKey, Public};
 use serde_json::{json, Value};
 use std::error::Error;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 use crate::comms::request::build_client;
+use crate::jwk::GenericJWK;
 
 #[derive(Debug)]
 pub struct PlaceOrderResult {
@@ -47,6 +49,12 @@ impl KeyFetcher for EmbeddedJwkOnly {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AcmeAccountResponse {
+    pub key: GenericJWK,
+    pub orders: String,
+    pub status: String,
+}
 
 pub struct AcmeAccountClient {
     private_key: PrivateKey,
@@ -139,6 +147,47 @@ impl AcmeAccountClient {
 
         account_url
             .ok_or_else(|| anyhow::anyhow!("newAccount response missing Location header"))
+    }
+
+    pub async fn get_account(
+        &self,
+        new_nonce_url: &str,
+    ) -> anyhow::Result<AcmeAccountResponse> {
+        let nonce = fetch_nonce(new_nonce_url, &self.http).await?;
+        let protected = self.protected_kid(nonce, self.account_url.as_str());
+        let jws_body = self.build_jws_body_kid_post_as_get(protected)?;
+
+        info!("Sending account request to {}", &self.account_url);
+        let resp = self.http
+            .post(self.account_url.clone())
+            .header("Content-Type", "application/jose+json")
+            .json(&jws_body)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("account information POST-AS-GET failed: {}", e))?;
+
+        let status = resp.status();
+
+        let body: Value = resp
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to read account response body: {}", e))?;
+
+        try_validate_jws_response(&body);
+        match status {
+            reqwest::StatusCode::OK => {
+                debug!("Account information retrieved");
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "account information endpoint returned unexpected status {}: {}",
+                    status,
+                    body
+                ));
+            }
+        }
+        let acc = serde_json::from_value(body).map_err(|e| anyhow::anyhow!(e))?;
+        anyhow::Ok(acc)
     }
 
     pub async fn place_order(

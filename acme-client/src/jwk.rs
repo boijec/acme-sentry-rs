@@ -1,13 +1,12 @@
-use std::error::Error;
-use openssl::bn::{BigNum, BigNumRef};
-use openssl::pkey::{PKey, Private, Public};
-use openssl::rsa::Rsa;
-use serde::Deserialize;
-use serde_json::Value;
-use crate::crypto::{SupportedAlgorithm, SupportedKey};
 use crate::encoding::decode_b64;
+use openssl::bn::{BigNum, BigNumRef};
+use openssl::pkey::{PKey, Public};
+use openssl::rsa::Rsa;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::error::Error;
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GenericJWK {
     alg: String,
     kty: String,

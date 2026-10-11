@@ -7,4 +7,3 @@ pub mod generate_csr;
 pub mod initialize_keys_for_user;
 pub mod login_user;
 pub mod place_order;
-mod challenge_plugin_job;

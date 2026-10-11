@@ -2,7 +2,7 @@ use crate::acme_jobs::accept_dns_challenge::AcceptDnsChallengeJob;
 use crate::job_execution::job_base::{Job, SchedulerHandle};
 use acme_client::comms::account::AcmeAccountClient;
 use acme_client::crypto::SupportedKey;
-use acme_client::keys::PrivateKey;
+use acme_client::keys::{load_private_key, PrivateKey};
 use async_trait::async_trait;
 use persistence::account_link::AcmeAccountLink;
 use persistence::database::DatabaseConnection;
@@ -55,12 +55,7 @@ impl Job for PlaceOrderJob {
         let dir = AcmeDirectory::get_existing(user.id, &conn)?
             .ok_or_else(|| anyhow::anyhow!("No ACME directory for user '{}'", self.user_id))?;
 
-        let pem_bytes = std::fs::read(&user.key_path)
-            .map_err(|e| anyhow::anyhow!("Failed to read PEM: {}", e))?;
-        let supported_key = SupportedKey::from_str(&user.key_type)
-            .map_err(|e| anyhow::anyhow!("Unsupported key type: {}", e))?;
-        let private_key = PrivateKey::load_private_bytes(&pem_bytes, supported_key)
-            .map_err(|e| anyhow::anyhow!("Failed to load private key: {}", e))?;
+        let private_key = load_private_key(&user.user_id, &user.key_path, &user.key_type)?;
 
         let acme = AcmeAccountClient::new(private_key, account_link.account_url, true)
             .map_err(|e| anyhow::anyhow!("Failed to create ACME client: {}", e))?;
