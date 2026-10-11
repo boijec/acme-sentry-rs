@@ -157,7 +157,7 @@ impl DatabaseConnection {
         Ok(DatabaseConnection { connection })
     }
 
-    pub fn prepare(&self, prepared_statement: &str) -> Result<Statement, Box<dyn Error>> {
+    pub fn prepare(&self, prepared_statement: &str) -> Result<Statement<'_>, Box<dyn Error>> {
         Ok(self.connection.prepare(prepared_statement)?)
     }
 
