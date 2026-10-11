@@ -2,7 +2,7 @@ use crate::acme_jobs::download_certificate::DownloadCertificateJob;
 use crate::job_execution::job_base::{Job, SchedulerHandle};
 use acme_client::comms::account::AcmeAccountClient;
 use acme_client::crypto::SupportedKey;
-use acme_client::keys::PrivateKey;
+use acme_client::keys::{load_private_key, PrivateKey};
 use async_trait::async_trait;
 use persistence::account_link::AcmeAccountLink;
 use persistence::database::DatabaseConnection;
@@ -12,6 +12,7 @@ use persistence::user::AcmeUser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::info;
+use persistence::challenge::AcmeDnsChallenge;
 
 #[derive(Serialize, Deserialize)]
 pub struct GenerateCsrJob {
@@ -60,15 +61,22 @@ impl Job for GenerateCsrJob {
         let dir = AcmeDirectory::get_existing(user.id, &conn)?
             .ok_or_else(|| anyhow::anyhow!("No ACME directory for user '{}'", self.user_id))?;
 
-        let pem_bytes = std::fs::read(&user.key_path)
-            .map_err(|e| anyhow::anyhow!("Failed to read PEM: {}", e))?;
-        let supported_key = SupportedKey::from_str(&user.key_type)
-            .map_err(|e| anyhow::anyhow!("Unsupported key type: {}", e))?;
-        let private_key = PrivateKey::load_private_bytes(&pem_bytes, supported_key)
-            .map_err(|e| anyhow::anyhow!("Failed to load private key: {}", e))?;
+        let private_key = load_private_key(&user.user_id, &user.key_path, &user.key_type)?;
 
         let acme = AcmeAccountClient::new(private_key, account_link.account_url, true)
             .map_err(|e| anyhow::anyhow!("Failed to create ACME client: {}", e))?;
+
+        let challenge_info = AcmeDnsChallenge::get_for_order(self.order_id, &conn)
+            .map_err(|e| anyhow::anyhow!("Failed to load challenge for order: {}", e))?.unwrap();
+
+        // TODO: use challenge url from DB
+        acme.notify_challenge_ready(&dir.new_nonce, "")
+            .await?;
+
+        info!(
+            "DNS challenge (id={}) persisted and CA notified. Submitting DnsDigJob.",
+            challenge_info.id
+        );
 
         info!(
             "Sending finalize request for domain '{}' (order {}).",

@@ -569,7 +569,7 @@ async fn fetch_nonce(nonce_url: &str, http: &reqwest::Client) -> anyhow::Result<
         .await
         .map_err(|e| anyhow::anyhow!("Failed to fetch nonce from '{}': {}", nonce_url, e))?;
     resp.headers()
-        .get("replay-nonce")
+        .get("Replay-Nonce")
         .ok_or_else(|| anyhow::anyhow!("Server did not return a replay-nonce header"))?
         .to_str()
         .map(|s| s.to_owned())

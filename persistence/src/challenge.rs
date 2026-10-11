@@ -2,6 +2,7 @@ use crate::database::DatabaseConnection;
 use sqlite::{State, Statement};
 use std::error::Error;
 
+// TODO: challenge info url
 #[derive(Debug)]
 pub struct AcmeDnsChallenge {
     pub id: i64,
@@ -28,6 +29,7 @@ impl AcmeDnsChallenge {
         Ok(None)
     }
 
+    // TODO: challenge url
     pub fn create(
         order_id: i64,
         token: &str,

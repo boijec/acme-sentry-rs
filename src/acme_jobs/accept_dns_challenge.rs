@@ -100,14 +100,6 @@ impl Job for AcceptDnsChallengeJob {
             challenge_info.dns_record_name, challenge_info.txt_record_value, self.order_id
         );
 
-        acme.notify_challenge_ready(&dir.new_nonce, &challenge_info.challenge_url)
-            .await?;
-
-        info!(
-            "DNS challenge (id={}) persisted and CA notified. Submitting DnsDigJob.",
-            challenge.id
-        );
-
         handle
             .submit(DnsDigJob::new(self.order_id, self.user_id.clone(), challenge.id))
             .await
