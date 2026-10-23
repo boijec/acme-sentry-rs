@@ -1,9 +1,9 @@
+use crate::job_execution::job_base::{Job, SchedulerHandle};
 use async_trait::async_trait;
+use persistence::database::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::instrument;
-use persistence::database::DatabaseConnection;
-use crate::job_execution::job_base::{Job, SchedulerHandle};
 
 #[derive(Serialize, Deserialize)]
 pub struct DbInitializationJob {}

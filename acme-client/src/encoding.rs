@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
 /// Encode a byte slice to a base64 string.
 pub fn encode_b64(input: &[u8]) -> String {

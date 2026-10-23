@@ -1,5 +1,5 @@
 use crate::encoding::{count_occurrences, decode_b64, encode_b64, remove_first, remove_last};
-    
+
 #[test]
 fn test_b64_encoding() {
     assert_eq!(encode_b64(b"testing tornado"),"dGVzdGluZyB0b3JuYWRv");

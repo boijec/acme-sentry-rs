@@ -1,9 +1,9 @@
+use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::sha::{sha256, sha384, sha512};
 use serde::{Deserialize, Serialize, Serializer};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use openssl::hash::MessageDigest;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SupportedKey {

@@ -1,7 +1,7 @@
+use crate::database::DatabaseConnection;
+use sqlite::{State, Statement};
 use std::error::Error;
 use std::path::PathBuf;
-use sqlite::{State, Statement};
-use crate::database::DatabaseConnection;
 
 #[derive(Debug)]
 pub struct AcmeUser {

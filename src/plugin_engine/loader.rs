@@ -13,9 +13,10 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, mpsc};
 use std::thread;
 use std::thread::JoinHandle;
-use tracing::{error, info};
+use tracing::info;
 
 struct PluginRunState {
+    #[allow(unused)]
     plugin_name: String,
     cancel_flag: Arc<AtomicBool>,
     events_tx: mpsc::Sender<PluginEvent>,

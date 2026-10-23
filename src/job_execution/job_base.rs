@@ -1,11 +1,12 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot, watch};
-use tracing::{error, info, instrument, warn, Instrument};
+use tracing::{Instrument, error, info, instrument, warn};
 
 #[async_trait]
 pub trait Job: Send + 'static {
     fn job_type(&self) -> &'static str;
+    #[allow(unused)]
     fn payload(&self) -> Value;
     async fn execute(&self, handle: SchedulerHandle) -> anyhow::Result<()>;
 }

@@ -1,12 +1,15 @@
-use std::collections::HashMap;
 use crate::job_execution::job_base::Job;
+use std::collections::HashMap;
 
+#[allow(unused)]
 type JobFactory = Box<dyn Fn(serde_json::Value) -> Box<dyn Job> + Send + Sync>;
 
+#[allow(unused)]
 pub struct JobRegistry {
     factories: HashMap<&'static str, JobFactory>,
 }
 
+#[allow(unused)]
 impl JobRegistry {
     pub fn new() -> Self {
         Self { factories: HashMap::new() }

@@ -1,10 +1,10 @@
 use crate::acme_jobs::download_certificate::DownloadCertificateJob;
 use crate::job_execution::job_base::{Job, SchedulerHandle};
 use acme_client::comms::account::AcmeAccountClient;
-use acme_client::crypto::SupportedKey;
-use acme_client::keys::{load_private_key, PrivateKey};
+use acme_client::keys::load_private_key;
 use async_trait::async_trait;
 use persistence::account_link::AcmeAccountLink;
+use persistence::challenge::AcmeDnsChallenge;
 use persistence::database::DatabaseConnection;
 use persistence::directory::AcmeDirectory;
 use persistence::order::AcmeOrder;
@@ -12,7 +12,6 @@ use persistence::user::AcmeUser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::info;
-use persistence::challenge::AcmeDnsChallenge;
 
 #[derive(Serialize, Deserialize)]
 pub struct GenerateCsrJob {

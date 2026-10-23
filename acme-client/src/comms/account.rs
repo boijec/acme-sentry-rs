@@ -1,14 +1,14 @@
+use crate::comms::request::build_client;
 use crate::csr::build_csr_der;
 use crate::encoding::encode_b64;
+use crate::jwk::GenericJWK;
 use crate::jws::{JWS, KeyFetcher};
 use crate::keys::PrivateKey;
 use openssl::pkey::{PKey, Public};
-use serde_json::{json, Value};
-use std::error::Error;
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::error::Error;
 use tracing::{debug, info, warn};
-use crate::comms::request::build_client;
-use crate::jwk::GenericJWK;
 
 #[derive(Debug)]
 pub struct PlaceOrderResult {

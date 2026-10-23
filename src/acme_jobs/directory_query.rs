@@ -1,14 +1,14 @@
 use crate::job_execution::job_base::{Job, SchedulerHandle};
 use acme_client::comms::directory::AcmeDirectoryApi;
+use acme_client::comms::request::build_client;
 use async_trait::async_trait;
 use persistence::database::DatabaseConnection;
 use persistence::directory::AcmeDirectory;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use serde_json::{from_value, Value};
+use serde_json::{Value, from_value};
 use std::error::Error;
 use tracing::{info, instrument};
-use acme_client::comms::request::build_client;
 
 #[derive(Serialize, Deserialize)]
 pub struct DirectoryUpdateJob {

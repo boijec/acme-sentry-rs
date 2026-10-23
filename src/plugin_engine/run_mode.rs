@@ -25,5 +25,6 @@ impl DiscoveryType {
 #[derive(Debug, Clone)]
 pub enum RunMode {
     Set,
+    #[allow(unused)]
     Unset,
 }

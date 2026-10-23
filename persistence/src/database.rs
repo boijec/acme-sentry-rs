@@ -1,4 +1,4 @@
-use common_utils::{EnumIterator, APPLICATION_CONFIG};
+use common_utils::{APPLICATION_CONFIG, EnumIterator};
 use sqlite::Statement;
 use std::error::Error;
 use std::fmt::{Display, Formatter};

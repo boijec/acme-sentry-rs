@@ -1,9 +1,11 @@
 use crate::acme_jobs::dns_dig::DnsDigJob;
 use crate::job_execution::job_base::{Job, SchedulerHandle};
+use crate::plugin_engine::loader::{SetConfig, run_plugin};
+use crate::plugin_engine::run_mode::{DiscoveryType, RunMode};
 use acme_client::comms::account::AcmeAccountClient;
-use acme_client::crypto::SupportedKey;
-use acme_client::keys::{load_private_key, PrivateKey};
+use acme_client::keys::load_private_key;
 use async_trait::async_trait;
+use common_utils::APPLICATION_CONFIG;
 use persistence::account_link::AcmeAccountLink;
 use persistence::challenge::AcmeDnsChallenge;
 use persistence::database::DatabaseConnection;
@@ -12,10 +14,7 @@ use persistence::order::AcmeOrder;
 use persistence::user::AcmeUser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::{info, warn};
-use common_utils::APPLICATION_CONFIG;
-use crate::plugin_engine::loader::{run_plugin, SetConfig};
-use crate::plugin_engine::run_mode::{DiscoveryType, RunMode};
+use tracing::warn;
 
 #[derive(Serialize, Deserialize)]
 pub struct AcceptDnsChallengeJob {

@@ -1,16 +1,15 @@
 use crate::crypto::SupportedKey;
 use crate::encoding::encode_b64;
+use crate::jwk::fast_padded_coordinate_vector;
 use crate::jws::JWSHeader;
-use openssl::bn::{BigNum, BigNumContext, BigNumRef};
+use openssl::bn::{BigNum, BigNumContext};
 use openssl::ec::{EcGroup, EcKey};
 use openssl::ecdsa::EcdsaSig;
 use openssl::pkey::{PKey, Private};
 use openssl::rsa::Rsa;
 use openssl::sign::Signer;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::error::Error;
-use serde::Deserialize;
-use crate::jwk::fast_padded_coordinate_vector;
 
 pub struct PrivateKey {
     pub kt: SupportedKey,

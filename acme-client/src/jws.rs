@@ -8,7 +8,7 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Public};
 use openssl::sign::Verifier;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::error::Error;
 
 pub struct JWS {

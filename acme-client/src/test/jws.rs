@@ -1,5 +1,5 @@
 use crate::crypto::SupportedKey;
-use crate::jws::{JWSHeader, KeyFetcher, JWS};
+use crate::jws::{JWS, JWSHeader, KeyFetcher};
 use crate::keys::PrivateKey;
 use openssl::pkey::{PKey, Public};
 use serde_json::json;

@@ -1,6 +1,6 @@
-use tempfile::tempdir;
-use std::fs::read_to_string;
 use crate::fs::FileSystem;
+use std::fs::read_to_string;
+use tempfile::tempdir;
 
 #[test]
 fn test_create_sub_dir() {

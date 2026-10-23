@@ -1,7 +1,6 @@
 use crate::job_execution::job_base::{Job, SchedulerHandle};
 use acme_client::comms::account::AcmeAccountClient;
-use acme_client::crypto::SupportedKey;
-use acme_client::keys::{load_private_key, PrivateKey};
+use acme_client::keys::load_private_key;
 use async_trait::async_trait;
 use common_utils::APPLICATION_CONFIG;
 use persistence::account_link::AcmeAccountLink;

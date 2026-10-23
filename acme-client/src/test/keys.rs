@@ -1,6 +1,6 @@
 use crate::crypto::SupportedKey;
 use crate::encoding::{decode_b64, encode_b64};
-use crate::keys::{gen_ec, gen_ed, gen_rsa, PrivateKey};
+use crate::keys::{PrivateKey, gen_ec, gen_ed, gen_rsa};
 use openssl::bn::BigNum;
 use openssl::rsa::Rsa;
 use serde::Deserialize;
