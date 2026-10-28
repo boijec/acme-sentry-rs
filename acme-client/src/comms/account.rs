@@ -2,9 +2,8 @@ use crate::comms::request::build_client;
 use crate::csr::build_csr_der;
 use crate::encoding::encode_b64;
 use crate::jwk::GenericJWK;
-use crate::jws::{JWS, KeyFetcher};
+use crate::jws::JWS;
 use crate::keys::PrivateKey;
-use openssl::pkey::{PKey, Public};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::error::Error;
@@ -35,18 +34,6 @@ pub struct FinalizeResult {
     /// Some(url) if the CA returned the certificate URL immediately.
     /// None if the order is still in the "processing" state and must be polled.
     pub certificate_url: Option<String>,
-}
-
-struct EmbeddedJwkOnly;
-
-impl KeyFetcher for EmbeddedJwkOnly {
-    fn fetch_key(&self, kid: String) -> Result<PKey<Public>, Box<dyn Error>> {
-        Err(format!(
-            "CA JWS response used 'kid' ({}), but only embedded 'jwk' is supported for response validation",
-            kid
-        )
-        .into())
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -582,7 +569,7 @@ fn try_validate_jws_response(body: &Value) {
         && body.get("signature").is_some();
 
     if is_flat_jws {
-        match JWS::parse_flat(body, Box::new(EmbeddedJwkOnly)) {
+        match JWS::parse_flat(body) {
             Ok(Some(_)) => {
                 info!("CA response validated as a signed flat JWS successfully.");
             }

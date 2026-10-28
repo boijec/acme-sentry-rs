@@ -1,10 +1,11 @@
 use crate::encoding::decode_b64;
-use openssl::bn::{BigNum, BigNumRef};
+use crate::error::{JwkError, KeyError};
+use crate::ssl_common::big_num_from_vec;
+use openssl::bn::BigNumRef;
 use openssl::pkey::{PKey, Public};
 use openssl::rsa::Rsa;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::error::Error;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenericJWK {
@@ -17,22 +18,24 @@ pub struct GenericJWK {
     n: Option<String>,
 }
 impl GenericJWK {
-    pub fn from_value(jwk: Value) -> Result<Self, Box<dyn Error>> {
+    pub fn from_value(jwk: Value) -> Result<Self, JwkError> {
         Ok(serde_json::from_value(jwk)?)
     }
-    pub fn parse_pub(&self) -> Result<PKey<Public>, Box<dyn Error>> {
+    pub fn parse_pub(&self) -> Result<PKey<Public>, JwkError> {
         match self.kty.as_str() {
             "RSA" => Ok(self.parse_rsa_pub()?),
-            _ => panic!("Unknown kty {}", self.kty),
+            _ => Err(JwkError::UnknownKeyTypeError(self.kty.clone())),
         }
     }
-    fn parse_rsa_pub(&self) -> Result<PKey<Public>, Box<dyn Error>> {
+    fn parse_rsa_pub(&self) -> Result<PKey<Public>, JwkError> {
         let n_coordinate_bytes = decode_b64(self.n.clone().unwrap().as_str())?;
         let e_coordinate_bytes = decode_b64(self.e.clone().unwrap().as_str())?;
-        let n = BigNum::from_slice(&n_coordinate_bytes)?;
-        let e = BigNum::from_slice(&e_coordinate_bytes)?;
-        let rsa = Rsa::from_public_components(n, e)?;
-        Ok(PKey::from_rsa(rsa)?)
+        let n = big_num_from_vec(&n_coordinate_bytes)?;
+        let e = big_num_from_vec(&e_coordinate_bytes)?;
+        let rsa = Rsa::from_public_components(n, e)
+            .map_err(|e| JwkError::PublicKeyComponentsError(e))?;
+        Ok(PKey::from_rsa(rsa)
+            .map_err(|e| JwkError::from(KeyError::UnableToCast(e, "RSA".to_string())))?)
     }
 }
 

@@ -1,15 +1,15 @@
 use crate::crypto::SupportedAlgorithm;
 use crate::encoding::{count_occurrences, decode_b64, encode_b64, remove_first};
+use crate::error::{JwkError, JwsError, KeyError};
 use crate::jwk::GenericJWK;
 use crate::keys::PrivateKey;
-use openssl::bn::BigNum;
+use crate::ssl_common::big_num_from_slice;
 use openssl::ecdsa::EcdsaSig;
 use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Public};
 use openssl::sign::Verifier;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::error::Error;
 
 pub struct JWS {
     header: JWSHeader,
@@ -25,10 +25,6 @@ pub struct JWSHeader {
     url: Option<String>,
 }
 
-pub trait KeyFetcher {
-    fn fetch_key(&self, kid: String) -> Result<PKey<Public>, Box<dyn Error>>;
-}
-
 impl JWSHeader {
     // bad idea, find something else... this will be impacted by the "directory" communication.
     pub fn with_alg(alg: SupportedAlgorithm) -> Self {
@@ -41,7 +37,7 @@ impl JWSHeader {
         }
     }
 
-    pub fn serialize_with_pkey(&self, pkey: &PrivateKey) -> Result<String, Box<dyn Error>> {
+    pub fn serialize_with_pkey(&self, pkey: &PrivateKey) -> Result<String, JwsError> {
         Ok(serde_json::to_string(&json!({
             "alg": self.alg,
             "jwk": pkey.get_jwk()?,
@@ -50,7 +46,7 @@ impl JWSHeader {
         }))?)
     }
 
-    pub fn serialize_with_kid(&self, kid: String) -> Result<String, Box<dyn Error>> {
+    pub fn serialize_with_kid(&self, kid: String) -> Result<String, JwsError> {
         Ok(serde_json::to_string(&json!({
             "alg": self.alg,
             "kid": Some(kid),
@@ -59,7 +55,7 @@ impl JWSHeader {
         }))?)
     }
 
-    pub fn from_string(header: String) -> Result<Self, Box<dyn Error>> {
+    pub fn from_string(header: String) -> Result<Self, JwsError> {
         Ok(serde_json::from_str(&header)?)
     }
 
@@ -77,7 +73,7 @@ impl JWS {
         &self.payload
     }
 
-    pub fn finalize(&self, pkey: &PrivateKey) -> Result<String, Box<dyn Error>> {
+    pub fn finalize(&self, pkey: &PrivateKey) -> Result<String, JwsError> {
         let encoded_header = encode_b64(self.header.serialize_with_pkey(pkey)?.as_bytes());
         let encoded_payload = encode_b64(self.payload.to_string().as_bytes());
         let jws_data = format!("{}.{}", encoded_header, encoded_payload);
@@ -87,12 +83,9 @@ impl JWS {
 
     pub fn parse(
         content: &String,
-        key_fetcher: Box<dyn KeyFetcher>,
-    ) -> Result<Option<JWS>, Box<dyn Error>> {
+    ) -> Result<Option<JWS>, JwsError> {
         if count_occurrences(content, '.') != 2 {
-            return Err(
-                "Error encountered when parsing JWS, JWS parts formatting is invalid".into(),
-            );
+            return Err(JwsError::JwsElementParseError("Error encountered when parsing JWS, JWS parts formatting is invalid".to_string()));
         }
         let signature_cut = content.rfind('.').unwrap();
         let (header_and_payload, sign) = content.split_at(signature_cut);
@@ -107,10 +100,7 @@ impl JWS {
         let key = match h_temp.jwk {
             Some(jwk) => GenericJWK::from_value(jwk)?.parse_pub(),
             None => {
-                if h_temp.kid.is_none() {
-                    return Err("JWK and KID parameter not found in JWS header".into());
-                }
-                Ok(key_fetcher.fetch_key(h_temp.kid.unwrap())?)
+                return Err(JwsError::from(JwkError::JwkKidNotFoundError));
             }
         }?;
 
@@ -123,17 +113,16 @@ impl JWS {
 
     pub fn parse_flat(
         value: &Value,
-        key_fetcher: Box<dyn KeyFetcher>,
-    ) -> Result<Option<JWS>, Box<dyn Error>> {
+    ) -> Result<Option<JWS>, JwsError> {
         let protected_b64 = value["protected"]
             .as_str()
-            .ok_or("Flat JWS missing 'protected' field")?;
+            .ok_or(JwsError::JwsElementParseError("Flat JWS missing 'protected' field".to_string()))?;
         let payload_b64 = value["payload"]
             .as_str()
-            .ok_or("Flat JWS missing 'payload' field")?;
+            .ok_or(JwsError::JwsElementParseError("Flat JWS missing 'payload' field".to_string()))?;
         let signature_b64 = value["signature"]
             .as_str()
-            .ok_or("Flat JWS missing 'signature' field")?;
+            .ok_or(JwsError::JwsElementParseError("Flat JWS missing 'signature' field".to_string()))?;
 
         let header_bytes = decode_b64(protected_b64)?;
         let header_string = String::from_utf8(header_bytes)?;
@@ -143,12 +132,7 @@ impl JWS {
         let key = match h_temp.jwk {
             Some(jwk) => GenericJWK::from_value(jwk)?.parse_pub(),
             None => {
-                if h_temp.kid.is_none() {
-                    return Err(
-                        "JWK and KID parameter not found in flat JWS protected header".into(),
-                    );
-                }
-                Ok(key_fetcher.fetch_key(h_temp.kid.unwrap())?)
+                return Err(JwsError::from(JwkError::JwkKidNotFoundError));
             }
         }?;
 
@@ -172,7 +156,7 @@ impl JWS {
         key: PKey<Public>,
         signed_input: &str,
         signature: Vec<u8>,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), JwsError> {
         match alg {
             SupportedAlgorithm::RS256 => {
                 Self::verify_with_rsa(&key, signed_input, &signature)?;
@@ -191,16 +175,18 @@ impl JWS {
         Ok(())
     }
 
-    fn verify_with_rsa(key: &PKey<Public>, signed_input: &str, signature: &Vec<u8>) -> Result<(), Box<dyn Error>> {
-        let mut verifier = Verifier::new(MessageDigest::sha256(), &key)?;
-        verifier.update(signed_input.as_bytes())?;
-        if !verifier.verify(&signature)? {
-            return Err("RSA (RS256) signature verification failed".into());
+    fn verify_with_rsa(key: &PKey<Public>, signed_input: &str, signature: &Vec<u8>) -> Result<(), JwsError> {
+        let mut verifier = Verifier::new(MessageDigest::sha256(), &key)
+            .map_err(|e| JwsError::JwsSignatureVerifierError(e, "RSA".to_string()))?;
+        verifier.update(signed_input.as_bytes())
+            .map_err(|e| JwsError::JwsSignatureUpdateError(e, "RSA".to_string()))?;
+        if !verifier.verify(&signature).map_err(|e| JwsError::JwsSignatureVerifierError(e, "RSA".to_owned()))? {
+            return Err(JwsError::JwsSignatureVerificationError("RSA (RS256)".to_string()));
         }
         Ok(())
     }
 
-    fn verify_with_ec(alg: &SupportedAlgorithm, key: &PKey<Public>, signed_input: &str, signature: &Vec<u8>) -> Result<(), Box<dyn Error>> {
+    fn verify_with_ec(alg: &SupportedAlgorithm, key: &PKey<Public>, signed_input: &str, signature: &Vec<u8>) -> Result<(), JwsError> {
         let coord_size: usize = match alg {
             SupportedAlgorithm::ES256 => 32,
             SupportedAlgorithm::ES384 => 48,
@@ -209,20 +195,22 @@ impl JWS {
         };
         let der_sig = ecdsa_raw_to_der(&signature, coord_size)?;
         let digest = alg.get_hash().get_digest();
-        let mut verifier = Verifier::new(digest, &key)?;
-        verifier.update(signed_input.as_bytes())?;
-        if !verifier.verify(&der_sig)? {
-            return Err(
-                format!("ECDSA ({}) signature verification failed", alg).into(),
-            );
+        let mut verifier = Verifier::new(digest, &key)
+            .map_err(|e| JwsError::JwsSignatureVerifierError(e, "ECDSA".to_string()))?;
+        verifier.update(signed_input.as_bytes())
+            .map_err(|e| JwsError::JwsSignatureUpdateError(e, "ECDSA".to_string()))?;
+        if !verifier.verify(&der_sig).map_err(|e| JwsError::JwsSignatureVerifierError(e, "ECDSA".to_string()))? {
+            return Err(JwsError::JwsSignatureVerificationError("ECDSA".to_string()));
         }
         Ok(())
     }
 
-    fn verify_with_ed(key: &PKey<Public>, signed_input: &str, signature: &Vec<u8>) -> Result<(), Box<dyn Error>> {
-        let mut verifier = Verifier::new_without_digest(&key)?;
-        if !verifier.verify_oneshot(&signature, signed_input.as_bytes())? {
-            return Err("EdDSA signature verification failed".into());
+    fn verify_with_ed(key: &PKey<Public>, signed_input: &str, signature: &Vec<u8>) -> Result<(), JwsError> {
+        let mut verifier = Verifier::new_without_digest(&key)
+            .map_err(|e| JwsError::JwsSignatureVerifierError(e, "EdDSA".to_string()))?;
+        if !verifier.verify_oneshot(&signature, signed_input.as_bytes())
+            .map_err(|e| JwsError::JwsSignatureVerifierError(e, "EdDSA".to_string()))? {
+            return Err(JwsError::JwsSignatureVerificationError("EdDSA".to_string()));
         }
         Ok(())
     }
@@ -230,18 +218,18 @@ impl JWS {
 
 /// Converts a raw ECDSA signature (R‖S concatenation as used in JWS RFC 7518 §3.4)
 /// into an ASN.1 DER SEQUENCE, which is the format OpenSSL's verifier expects.
-fn ecdsa_raw_to_der(raw: &[u8], coord_size: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+fn ecdsa_raw_to_der(raw: &[u8], coord_size: usize) -> Result<Vec<u8>, JwsError> {
     if raw.len() != coord_size * 2 {
-        return Err(format!(
-            "Invalid raw ECDSA signature length: expected {} bytes ({} per coordinate), got {}",
+        return Err(JwsError::RawEcdsaSignatureLengthError(
             coord_size * 2,
             coord_size,
             raw.len()
-        )
-        .into());
+        ));
     }
-    let r = BigNum::from_slice(&raw[..coord_size])?;
-    let s = BigNum::from_slice(&raw[coord_size..])?;
-    let sig = EcdsaSig::from_private_components(r, s)?;
-    Ok(sig.to_der()?)
+    let r = big_num_from_slice(&raw[..coord_size])?;
+    let s = big_num_from_slice(&raw[coord_size..])?;
+    let sig = EcdsaSig::from_private_components(r, s)
+        .map_err(|e| JwsError::PrivateKeyComponentsError(e))?;
+    Ok(sig.to_der()
+        .map_err(|e| JwsError::from(KeyError::UnableToCast(e, "Ecdsa".to_string())))?)
 }

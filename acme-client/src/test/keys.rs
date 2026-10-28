@@ -9,7 +9,6 @@ use serde::Deserialize;
 #[derive(Deserialize, Debug)]
 struct RsaJwk {
     kty: String,
-    alg: String,
     e: String,
     n: String,
 }

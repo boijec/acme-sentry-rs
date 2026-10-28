@@ -8,7 +8,7 @@ fn test_hashing() {
     let hash = hasher.finish();
     let hash_data = b"test";
 
-    let hash_result = SupportedHash::SHA256.hash(hash_data).unwrap();
+    let hash_result = SupportedHash::SHA256.hash(hash_data);
     
     assert_eq!(hash_result.len(), 32);
     assert_eq!(hex::encode(hash_result), hex::encode(hash));

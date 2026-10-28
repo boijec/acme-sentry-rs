@@ -1,8 +1,8 @@
+use crate::error::CryptoError;
 use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::sha::{sha256, sha384, sha512};
 use serde::{Deserialize, Serialize, Serializer};
-use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,25 +32,25 @@ impl SupportedKey {
         }
     }
 
-    pub fn from_curve(crv: &str) -> SupportedKey {
+    pub fn from_curve(crv: &str) -> Result<SupportedKey, CryptoError> {
         match crv {
-            "P-256" => SupportedKey::EcP256,
-            "P-384" => SupportedKey::EcP384,
-            "P-521" => SupportedKey::EcP521,
-            _ => panic!("Unknown curve {}", crv)
+            "P-256" => Ok(SupportedKey::EcP256),
+            "P-384" => Ok(SupportedKey::EcP384),
+            "P-521" => Ok(SupportedKey::EcP521),
+            _ => Err(CryptoError::UnknownCurveError(crv.to_string()))
         }
     }
 
-    pub fn from_kty(kty: &str) -> SupportedKey {
+    pub fn from_kty(kty: &str) -> Result<SupportedKey, CryptoError> {
         match kty {
-            "RSA" => SupportedKey::Rsa2048,
-            "EC" => SupportedKey::EcP256,
-            "Ed25519" => SupportedKey::Ed25519,
-            _ => panic!("Unknown kty {}", kty),
+            "RSA" => Ok(SupportedKey::Rsa2048),
+            "EC" => Ok(SupportedKey::EcP256),
+            "Ed25519" => Ok(SupportedKey::Ed25519),
+            _ => Err(CryptoError::UnknownKtyError(kty.to_string())),
         }
     }
 
-    pub fn from_str(string: &str) -> Result<SupportedKey, Box<dyn Error>> {
+    pub fn from_str(string: &str) -> Result<SupportedKey, CryptoError> {
         match string.to_lowercase().as_str() {
             "rsa-2048" => Ok(SupportedKey::Rsa2048),
             "rsa-4096" => Ok(SupportedKey::Rsa4096),
@@ -58,7 +58,7 @@ impl SupportedKey {
             "ec-p384" => Ok(SupportedKey::EcP384),
             "ec-p521" => Ok(SupportedKey::EcP521),
             "ec-ed25519" => Ok(SupportedKey::Ed25519),
-            _ => Err(format!("Unknown key type {}", string).into()),
+            _ => Err(CryptoError::UnknownKeyTypeError(string.to_string())),
         }
     }
 
@@ -91,12 +91,12 @@ impl SupportedKey {
         }
     }
 
-    pub fn get_coordinate_size(&self) -> usize {
+    pub fn get_coordinate_size(&self) -> Result<usize, CryptoError> {
         match self {
-            SupportedKey::EcP256 => 32,
-            SupportedKey::EcP384 => 48,
-            SupportedKey::EcP521 => 66,
-            kt => panic!("Coordinate size is not available for key type: {}", kt)
+            SupportedKey::EcP256 => Ok(32),
+            SupportedKey::EcP384 => Ok(48),
+            SupportedKey::EcP521 => Ok(66),
+            kt => Err(CryptoError::CoordinateSizeError(kt.to_string().to_string()))
         }
     }
 }
@@ -136,14 +136,14 @@ impl SupportedAlgorithm {
         }
     }
 
-    pub fn from_str(alg: &str) -> SupportedAlgorithm {
+    pub fn from_str(alg: &str) -> Result<SupportedAlgorithm, CryptoError> {
         match alg {
-            "RS256" => SupportedAlgorithm::RS256,
-            "ES256" => SupportedAlgorithm::ES256,
-            "ES384" => SupportedAlgorithm::ES384,
-            "ES512" => SupportedAlgorithm::ES512,
-            "EdDSA" => SupportedAlgorithm::EdDSA,
-             default => panic!("Algorithm {} is not supported", default)
+            "RS256" => Ok(SupportedAlgorithm::RS256),
+            "ES256" => Ok(SupportedAlgorithm::ES256),
+            "ES384" => Ok(SupportedAlgorithm::ES384),
+            "ES512" => Ok(SupportedAlgorithm::ES512),
+            "EdDSA" => Ok(SupportedAlgorithm::EdDSA),
+             default => Err(CryptoError::AlgorithmSupportError(default.to_string())),
         }
     }
 
@@ -169,12 +169,22 @@ pub fn sha256_b64(data: &[u8]) -> String {
     encode_b64(&sha256(data))
 }
 
-impl SupportedHash {
-    pub fn hash(&self, hash_data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+impl Into<String> for &SupportedHash {
+    fn into(self) -> String {
         match self {
-            SupportedHash::SHA256 => Ok(sha256(hash_data).to_vec()),
-            SupportedHash::SHA384 => Ok(sha384(hash_data).to_vec()),
-            SupportedHash::SHA512 => Ok(sha512(hash_data).to_vec())
+            SupportedHash::SHA256 => "SHA256".into(),
+            SupportedHash::SHA384 => "SHA384".into(),
+            SupportedHash::SHA512 => "SHA512".into(),
+        }
+    }
+}
+
+impl SupportedHash {
+    pub fn hash(&self, hash_data: &[u8]) -> Vec<u8> {
+        match self {
+            SupportedHash::SHA256 => sha256(hash_data).to_vec(),
+            SupportedHash::SHA384 => sha384(hash_data).to_vec(),
+            SupportedHash::SHA512 => sha512(hash_data).to_vec(),
         }
     }
 
