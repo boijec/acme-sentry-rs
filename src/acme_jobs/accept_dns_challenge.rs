@@ -1,5 +1,5 @@
 use crate::acme_jobs::dns_dig::DnsDigJob;
-use crate::job_execution::job_base::{Job, SchedulerHandle};
+use crate::job_execution::job_base::{Job, JobDependencies, SchedulerHandle};
 use crate::plugin_engine::loader::{SetConfig, run_plugin};
 use crate::plugin_engine::run_mode::{DiscoveryType, RunMode};
 use acme_client::comms::account::AcmeAccountClient;
@@ -29,8 +29,8 @@ impl AcceptDnsChallengeJob {
 }
 
 #[async_trait]
-impl Job for AcceptDnsChallengeJob {
-    fn job_type(&self) -> &'static str {
+impl<'a> Job<'a> for AcceptDnsChallengeJob {
+    fn job_type(&self) -> &'a str {
         "accept-dns-challenge-job"
     }
 
@@ -38,7 +38,11 @@ impl Job for AcceptDnsChallengeJob {
         serde_json::to_value(self).unwrap()
     }
 
-    async fn execute(&self, handle: SchedulerHandle) -> anyhow::Result<()> {
+    fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
+        return;
+    }
+
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> anyhow::Result<()> {
         let conn = DatabaseConnection::get_connection()
             .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
 

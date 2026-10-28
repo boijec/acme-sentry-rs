@@ -1,26 +1,29 @@
 use async_trait::async_trait;
+use common_utils::fs::FileSystemOperations;
 use serde_json::Value;
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, watch};
-use tracing::{Instrument, error, info, instrument, warn};
+use tracing::{Instrument, error, info, warn};
 
 #[async_trait]
-pub trait Job: Send + 'static {
-    fn job_type(&self) -> &'static str;
+pub trait Job<'a>: Send + 'a {
+    fn job_type(&self) -> &'a str;
     #[allow(unused)]
     fn payload(&self) -> Value;
-    async fn execute(&self, handle: SchedulerHandle) -> anyhow::Result<()>;
+    fn inject_dependencies(&mut self, dependencies: &JobDependencies);
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> anyhow::Result<()>;
 }
-enum SchedulerMessage {
-    Job(Box<dyn Job>),
+enum SchedulerMessage<'a> {
+    Job(Box<dyn Job<'a>>),
     Shutdown(oneshot::Sender<()>),
 }
 #[derive(Clone, Debug)]
-pub struct SchedulerHandle {
-    sender: mpsc::Sender<SchedulerMessage>,
+pub struct SchedulerHandle<'a> {
+    sender: mpsc::Sender<SchedulerMessage<'a>>,
     shutdown_rx: watch::Receiver<bool>,
 }
-impl SchedulerHandle {
-    pub async fn submit<J: Job>(&self, job: J) -> Result<(), &'static str> {
+impl<'a> SchedulerHandle<'a> {
+    pub async fn submit<J: Job<'a>>(&self, job: J) -> Result<(), &'static str> {
         self.sender
             .send(SchedulerMessage::Job(Box::new(job)))
             .await
@@ -47,18 +50,33 @@ impl SchedulerHandle {
     }
 }
 
-pub struct Scheduler {
-    receiver: mpsc::Receiver<SchedulerMessage>,
+pub struct Scheduler<'a> {
+    receiver: mpsc::Receiver<SchedulerMessage<'a>>,
     shutdown_tx: watch::Sender<bool>,
+    dependencies: Option<JobDependencies>,
 }
-impl Scheduler {
-    pub fn new(buffer: usize) -> (Self, SchedulerHandle) {
+pub struct JobDependencies {
+    file_system: Arc<dyn FileSystemOperations + Send + Sync>,
+}
+impl JobDependencies {
+    pub fn new(
+        file_system: Arc<dyn FileSystemOperations + Send + Sync>
+    ) -> Self {
+        Self { file_system }
+    }
+    pub fn file_system(&self) -> Arc<dyn FileSystemOperations + Send + Sync> {
+        Arc::clone(&self.file_system)
+    }
+}
+impl<'a> Scheduler<'a> {
+    pub fn new(buffer: usize) -> (Self, SchedulerHandle<'a>) {
         let (sender, receiver) = mpsc::channel(buffer);
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
         let scheduler = Scheduler {
             receiver,
             shutdown_tx,
+            dependencies: None,
         };
         let handle = SchedulerHandle {
             sender,
@@ -66,22 +84,33 @@ impl Scheduler {
         };
         (scheduler, handle)
     }
-    #[instrument(level = "trace", name = "scheduler", skip_all)]
-    pub async fn run(mut self, handle: SchedulerHandle) {
+    pub fn with_dependencies(&mut self, job_dependencies: JobDependencies) {
+        self.dependencies = Some(job_dependencies);
+    }
+    //#[instrument(level = "trace", name = "scheduler", skip_all)]
+    pub async fn run(mut self, handle: SchedulerHandle<'a>) {
+        if self.dependencies.as_ref().is_none() {
+            error!("No job dependencies declared for job scheduler, shutting down..");
+            let _ = self.shutdown_tx.send(true);
+            return;
+        }
         info!("Scheduler started");
         let mut clean_lever = false;
         while let Some(message) = self.receiver.recv().await {
             match message {
-                SchedulerMessage::Job(job) => {
+                SchedulerMessage::Job(mut job) => {
                     if !clean_lever {
                         let job_name = job.job_type();
-                        let span = tracing::info_span!("worker", job_name = job_name);
+                        let span = tracing::info_span!("job-message", job_name = job_name);
+                        job.inject_dependencies(self.dependencies.as_ref().unwrap());
                         span.follows_from(tracing::Span::current());
                         let job_result = job.execute(handle.clone()).instrument(span).await;
                         if job_result.is_err() {
                             let e = job_result.unwrap_err();
                             error!("Failed to execute job: {:?}", e);
-                            warn!("A job in the queue has errored out queue will be alive until shutdown hook is called");
+                            warn!(
+                                "A job in the queue has errored out queue will be alive until shutdown hook is called"
+                            );
                             clean_lever = true;
                         }
                     } else {
@@ -94,7 +123,8 @@ impl Scheduler {
                     while let Ok(msg) = self.receiver.try_recv() {
                         if let SchedulerMessage::Job(job) = msg {
                             let job_name = job.job_type();
-                            let span = tracing::info_span!("worker-cleanup", job_name = job_name);
+                            let span =
+                                tracing::info_span!("job-message-cleanup", job_name = job_name);
                             span.follows_from(tracing::Span::current());
                             let job_result = job.execute(handle.clone()).instrument(span).await;
                             if job_result.is_err() {
@@ -116,7 +146,7 @@ impl Scheduler {
 
 #[cfg(test)]
 mod tests {
-    use crate::job_execution::job_base::{Job, Scheduler, SchedulerHandle};
+    use crate::job_execution::job_base::{Job, JobDependencies, Scheduler, SchedulerHandle};
     use async_trait::async_trait;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
@@ -127,15 +157,20 @@ mod tests {
         id: u32,
     }
     #[async_trait]
-    impl Job for PrintJob {
-        fn job_type(&self) -> &'static str {
+    impl<'a> Job<'a> for PrintJob {
+        fn job_type(&self) -> &'a str {
             "print-job"
         }
         fn payload(&self) -> Value {
             serde_json::to_value(self).unwrap()
         }
+
+        fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
+            return;
+        }
+
         #[instrument]
-        async fn execute(&self, _: SchedulerHandle) -> anyhow::Result<()> {
+        async fn execute(&self, _: SchedulerHandle<'a>) -> anyhow::Result<()> {
             info!("Running job {}", self.id);
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             info!("Job {} done", self.id);

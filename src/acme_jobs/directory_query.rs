@@ -1,4 +1,4 @@
-use crate::job_execution::job_base::{Job, SchedulerHandle};
+use crate::job_execution::job_base::{Job, JobDependencies, SchedulerHandle};
 use acme_client::comms::directory::AcmeDirectoryApi;
 use acme_client::comms::request::build_client;
 use async_trait::async_trait;
@@ -8,7 +8,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, from_value};
 use std::error::Error;
-use tracing::{info, instrument};
+use tracing::info;
 
 #[derive(Serialize, Deserialize)]
 pub struct DirectoryUpdateJob {
@@ -53,15 +53,18 @@ impl DirectoryUpdateJob {
 }
 
 #[async_trait]
-impl Job for DirectoryUpdateJob {
-    fn job_type(&self) -> &'static str {
+impl<'a> Job<'a> for DirectoryUpdateJob {
+    fn job_type(&self) -> &'a str {
         "directory-update-job"
     }
     fn payload(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
-    #[instrument(level = "trace", name = "directory_update_job", fields(job_name = %self.job_type()), skip_all)]
-    async fn execute(&self, _scheduler: SchedulerHandle) -> anyhow::Result<()> {
+
+    fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
+        return;
+    }
+    async fn execute(&self, _scheduler: SchedulerHandle<'a>) -> anyhow::Result<()> {
         if self.base_url.is_none() {
             info!("Acme base uri not configured for job, will look in user state...");
         }

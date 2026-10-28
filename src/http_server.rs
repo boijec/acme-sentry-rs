@@ -17,9 +17,9 @@ pub struct NewOrderRequest {
     pub domain: String,
 }
 
-pub async fn post_new_order(
+pub async fn post_new_order<'a>(
     req: web::Json<NewOrderRequest>,
-    handle: web::Data<SchedulerHandle>,
+    handle: web::Data<SchedulerHandle<'a>>,
 ) -> impl Responder {
     info!("Received new order request: domain='{}'", req.domain);
     let user_id = APPLICATION_CONFIG.get().unwrap().user_id.clone();

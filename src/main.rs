@@ -8,22 +8,30 @@ use crate::acme_jobs::db_initialization::DbInitializationJob;
 use crate::acme_jobs::directory_query::DirectoryUpdateJob;
 use crate::acme_jobs::initialize_keys_for_user::InitializeLocalUserJob;
 use crate::acme_jobs::login_user::LoginUserJob;
-use crate::job_execution::job_base::Scheduler;
+use crate::job_execution::job_base::{JobDependencies, Scheduler};
 use crate::plugin_engine::checkers::check_plugins_directory;
 use crate::statics::{Args, YamlConfig};
 use actix_web::{App, HttpServer, web};
 use anyhow::anyhow;
 use clap::{Parser, crate_version};
+use common_utils::fs::BasicUnixFileSystem;
 use common_utils::{APPLICATION_CONFIG, ApplicationConfig, InternalIdTooling};
 use std::error::Error;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::{env, fs};
 use tracing::{Instrument, Span, error, info, info_span};
 
 async fn async_main() -> Result<(), Box<dyn Error>> {
-    let (scheduler, handle) = Scheduler::new(32);
     let config = APPLICATION_CONFIG.get().unwrap();
+    let (mut scheduler, handle) = Scheduler::new(32);
+    let fs = BasicUnixFileSystem::new(config.output_dir.as_str())?;
+    scheduler.with_dependencies(
+        JobDependencies::new(
+            Arc::new(fs),
+        )
+    );
     DirectoryUpdateJob::validate_url(Some(config.base_url.clone()))?;
     let scheduler_span = info_span!("scheduler", user_id = config.user_id);
     scheduler_span.follows_from(Span::current());

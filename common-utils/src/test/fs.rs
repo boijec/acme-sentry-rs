@@ -1,11 +1,11 @@
-use crate::fs::FileSystem;
+use crate::fs::{FileSystemOperations, BasicUnixFileSystem};
 use std::fs::read_to_string;
 use tempfile::tempdir;
 
 #[test]
 fn test_create_sub_dir() {
     let tmp_dir = tempdir().unwrap();
-    let fs = FileSystem::new(tmp_dir.path()).unwrap();
+    let fs = BasicUnixFileSystem::new(tmp_dir.path()).unwrap();
 
     let sub = fs.ensure_sub_dir("test_sub_dir").unwrap();
     assert!(sub.exists());
@@ -15,7 +15,8 @@ fn test_create_sub_dir() {
 #[test]
 fn test_write_to_file() {
     let tmp_dir = tempdir().unwrap();
-    let fs = FileSystem::new(tmp_dir.path()).unwrap();
+    let fs = BasicUnixFileSystem::new(tmp_dir.path()).unwrap();
+    let fs = &fs as &dyn FileSystemOperations;
     let sub = fs.ensure_sub_dir("data").unwrap();
     assert!(sub.exists());
 

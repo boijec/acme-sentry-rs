@@ -1,4 +1,4 @@
-use crate::job_execution::job_base::{Job, SchedulerHandle};
+use crate::job_execution::job_base::{Job, JobDependencies, SchedulerHandle};
 use acme_client::comms::account::AcmeAccountClient;
 use acme_client::keys::load_private_key;
 use async_trait::async_trait;
@@ -42,8 +42,8 @@ impl DownloadCertificateJob {
 }
 
 #[async_trait]
-impl Job for DownloadCertificateJob {
-    fn job_type(&self) -> &'static str {
+impl<'a> Job<'a> for DownloadCertificateJob {
+    fn job_type(&self) -> &'a str {
         "download-certificate-job"
     }
 
@@ -51,7 +51,11 @@ impl Job for DownloadCertificateJob {
         serde_json::to_value(self).unwrap()
     }
 
-    async fn execute(&self, handle: SchedulerHandle) -> anyhow::Result<()> {
+    fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
+        return;
+    }
+
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> anyhow::Result<()> {
         let conn = DatabaseConnection::get_connection()
             .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
 

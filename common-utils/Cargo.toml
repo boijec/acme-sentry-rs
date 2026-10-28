@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 uuid = { version = "1.28.0", features = ["v4"] }
 tracing = "0.1.44"
+thiserror = "2.0.21"
 
 
 [dev-dependencies]

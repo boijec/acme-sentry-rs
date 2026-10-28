@@ -1,5 +1,5 @@
 use crate::acme_jobs::accept_dns_challenge::AcceptDnsChallengeJob;
-use crate::job_execution::job_base::{Job, SchedulerHandle};
+use crate::job_execution::job_base::{Job, JobDependencies, SchedulerHandle};
 use acme_client::comms::account::AcmeAccountClient;
 use acme_client::keys::load_private_key;
 use async_trait::async_trait;
@@ -25,8 +25,8 @@ impl PlaceOrderJob {
 }
 
 #[async_trait]
-impl Job for PlaceOrderJob {
-    fn job_type(&self) -> &'static str {
+impl<'a> Job<'a> for PlaceOrderJob {
+    fn job_type(&self) -> &'a str {
         "place-order-job"
     }
 
@@ -34,7 +34,11 @@ impl Job for PlaceOrderJob {
         serde_json::to_value(self).unwrap()
     }
 
-    async fn execute(&self, handle: SchedulerHandle) -> anyhow::Result<()> {
+    fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
+        return;
+    }
+
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> anyhow::Result<()> {
         let conn = DatabaseConnection::get_connection()
             .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
 
