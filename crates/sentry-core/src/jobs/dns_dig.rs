@@ -1,5 +1,3 @@
-use crate::acme_jobs::generate_csr::GenerateCsrJob;
-use crate::job_execution::job_base::{Job, JobDependencies, SchedulerHandle};
 use async_trait::async_trait;
 use persistence::challenge::AcmeDnsChallenge;
 use persistence::database::DatabaseConnection;
@@ -7,6 +5,10 @@ use persistence::order::AcmeOrder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::{info, warn};
+use sentry_job_engine::dependencies::JobDependencies;
+use sentry_job_engine::error::JobEngineError;
+use sentry_job_engine::job::Job;
+use sentry_job_engine::scheduling::SchedulerHandle;
 
 /// Maximum number of polling retries before giving up on DNS propagation.
 const MAX_DIG_RETRIES: u32 = 30;
@@ -68,15 +70,11 @@ impl<'a> Job<'a> for DnsDigJob {
         "dns-dig-job"
     }
 
-    fn payload(&self) -> Value {
-        serde_json::to_value(self).unwrap()
-    }
-
     fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
         return;
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> anyhow::Result<()> {
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
         let conn = DatabaseConnection::get_connection()
             .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
 

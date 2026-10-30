@@ -1,15 +1,15 @@
-use crate::crypto::SupportedKey;
+use openssl::ec::{EcGroup, EcKey};
+use openssl::ecdsa::EcdsaSig;
+use openssl::pkey::{PKey, Private};
+use openssl::rsa::Rsa;
+use openssl::sign::Signer;
+use crate::crypto::{SupportedHash, SupportedKey};
 use crate::encoding::encode_b64;
 use crate::error::KeyError::JWKFormattingError;
 use crate::error::{CryptoError, KeyError};
 use crate::jwk::fast_padded_coordinate_vector;
 use crate::jws::JWSHeader;
 use crate::ssl_common::{get_big_num, get_big_num_context};
-use openssl::ec::{EcGroup, EcKey};
-use openssl::ecdsa::EcdsaSig;
-use openssl::pkey::{PKey, Private};
-use openssl::rsa::Rsa;
-use openssl::sign::Signer;
 use serde_json::json;
 
 pub struct PrivateKey {
@@ -53,7 +53,7 @@ impl PrivateKey {
         }
     }
 
-    pub (crate) fn rsa_jwk(&self) -> Result<serde_json::Value, KeyError> {
+    pub fn rsa_jwk(&self) -> Result<serde_json::Value, KeyError> {
         let rsa = self.k.rsa()
             .map_err(|e| KeyError::UnableToCast(e, self.kt.to_string().to_string()))?;
         Ok(json!({
@@ -63,7 +63,7 @@ impl PrivateKey {
             "n": encode_b64(&rsa.n().to_vec()),
         }))
     }
-    pub (crate) fn ec_jwk(&self) -> Result<serde_json::Value, KeyError> {
+    pub fn ec_jwk(&self) -> Result<serde_json::Value, KeyError> {
         let ec = self.k.ec_key()
             .map_err(|e| KeyError::UnableToCast(e, self.kt.to_string().to_string()))?;
         // "padding" but really - sizes according to RFC 7517
@@ -90,7 +90,7 @@ impl PrivateKey {
                 .map_err(|e| KeyError::UnableToPadVector(e))?),
         }))
     }
-    pub (crate) fn ed_jwk(&self) -> Result<serde_json::Value, KeyError> {
+    pub fn ed_jwk(&self) -> Result<serde_json::Value, KeyError> {
         // Neither google nor siri knew what the fuck to do
         // chat-gpt suggested throwing everything in a temp-file and re-reading that
         // but that sounds too fucking nasty
@@ -150,7 +150,6 @@ impl PrivateKey {
     }
 
     pub fn jwk_thumbprint(&self) -> Result<String, KeyError> {
-        use crate::crypto::SupportedHash;
         let jwk = self.get_jwk()?;
         let canonical = canonical_jwk_string(&jwk)?;
         let hash = SupportedHash::SHA256.hash(canonical.as_bytes());
@@ -189,19 +188,19 @@ impl PrivateKey {
     }
 }
 
-/// Returns either a private key instance, or an anyhow error describing
-pub fn load_private_key(user_id: &str, key_path: &str, key_type: &str) -> anyhow::Result<PrivateKey> {
+// TODO: refactor with more coherent errors
+pub fn load_private_key(user_id: &str, key_path: &str, key_type: &str) -> Result<PrivateKey, KeyError> {
     let absolute_key_path = key_path.to_owned() + "/" + user_id + ".pem";
     let pem_bytes = std::fs::read(absolute_key_path)
-        .map_err(|e| anyhow::anyhow!("Failed to read PEM: {}", e))?;
+        .map_err(|e| KeyError::GenericKeyError("Failed to read PEM".to_string()))?;
     let supported_key = SupportedKey::from_str(key_type)
-        .map_err(|e| anyhow::anyhow!("Unsupported key type: {}", e))?;
+        .map_err(|e| KeyError::GenericKeyError("Unsupported key type".to_string()))?;
     let private_key = PrivateKey::load_private_bytes(&pem_bytes, supported_key)
-        .map_err(|e| anyhow::anyhow!("Failed to load private key: {}", e))?;
+        .map_err(|e| KeyError::GenericKeyError("Failed to load private key".to_string()))?;
     Ok(private_key)
 }
 
-pub(crate) fn gen_rsa(key_length: u32) -> Result<PKey<Private>, KeyError> {
+pub fn gen_rsa(key_length: u32) -> Result<PKey<Private>, KeyError> {
     let rsa = Rsa::generate(key_length)
         .map_err(|e| KeyError::RsaGenerationError(e, key_length))?;
     Ok(
@@ -210,7 +209,7 @@ pub(crate) fn gen_rsa(key_length: u32) -> Result<PKey<Private>, KeyError> {
     )
 }
 
-pub(crate) fn gen_ec(ec_type: &SupportedKey) -> Result<PKey<Private>, KeyError> {
+pub fn gen_ec(ec_type: &SupportedKey) -> Result<PKey<Private>, KeyError> {
     let ec = EcKey::generate(
         EcGroup::from_curve_name(ec_type.get_nid())
             .map_err(|e| KeyError::EcCurveError(e, ec_type.get_nid().as_raw()))?
@@ -223,7 +222,7 @@ pub(crate) fn gen_ec(ec_type: &SupportedKey) -> Result<PKey<Private>, KeyError> 
     )
 }
 
-pub(crate) fn gen_ed() -> Result<PKey<Private>, KeyError> {
+pub fn gen_ed() -> Result<PKey<Private>, KeyError> {
     Ok(
         PKey::generate_ed25519()
             .map_err(|e| KeyError::EdGenerationError(e, SupportedKey::Ed25519))?

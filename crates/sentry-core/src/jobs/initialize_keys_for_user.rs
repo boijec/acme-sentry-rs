@@ -1,15 +1,19 @@
-use crate::job_execution::job_base::{Job, JobDependencies, SchedulerHandle};
 use acme_client::crypto::SupportedKey;
 use acme_client::keys::PrivateKey;
 use async_trait::async_trait;
 use common_utils::fs::FileSystemOperations;
 use persistence::database::DatabaseConnection;
 use persistence::user::AcmeUser;
+use sentry_io::fs::FileSystemOperations;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 use std::sync::Arc;
 use tracing::info;
+use sentry_job_engine::dependencies::JobDependencies;
+use sentry_job_engine::error::JobEngineError;
+use sentry_job_engine::job::Job;
+use sentry_job_engine::scheduling::SchedulerHandle;
 
 #[derive(Serialize, Deserialize)]
 pub struct InitializeLocalUserJob {
@@ -52,14 +56,11 @@ impl <'a> Job<'a> for InitializeLocalUserJob {
     fn job_type(&self) -> &'a str {
         "initialize-local-user-job"
     }
-    fn payload(&self) -> Value {
-        serde_json::to_value(self).unwrap()
-    }
     fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
         let fs = dependencies.file_system();
         self.fs = Some(fs);
     }
-    async fn execute(&self, _: SchedulerHandle<'a>) -> anyhow::Result<()>{
+    async fn execute(&self, _: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
         let connection = DatabaseConnection::get_connection().unwrap();
         let mut user = AcmeUser::get_user(self.user_id.as_str(), &connection);
         if user.is_err() {

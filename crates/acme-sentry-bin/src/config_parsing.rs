@@ -105,7 +105,7 @@ fn log_level_parse(s: &str) -> Result<Level, String> {
     }
 }
 
-pub(crate) fn write_application_config(args: Args) -> anyhow::Result<ApplicationConfig> {
+pub(crate) fn build_application_config(args: Args) -> anyhow::Result<ApplicationConfig> {
     let (yaml_mode, application_mode) = handle_mode(args.clone())?;
     if yaml_mode {
         let yaml_file = fs::read_to_string(PathBuf::from_str(args.yaml_config.unwrap().as_str())?)?;

@@ -1,9 +1,9 @@
 use crate::comms::request::build_client;
-use crate::csr::build_csr_der;
-use crate::encoding::encode_b64;
-use crate::jwk::GenericJWK;
-use crate::jws::JWS;
-use crate::keys::PrivateKey;
+use sentry_protocol_client::csr::build_csr_der;
+use sentry_protocol_client::encoding::encode_b64;
+use sentry_protocol_client::jwk::GenericJWK;
+use sentry_protocol_client::jws::JWS;
+use sentry_protocol_client::keys::PrivateKey;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::error::Error;
@@ -302,7 +302,7 @@ impl AcmeAccountClient {
         let key_authorization = format!("{}.{}", token, thumbprint);
 
         // TXT record value: base64url(sha256(key_authorization))
-        let txt_record_value = crate::crypto::sha256_b64(key_authorization.as_bytes());
+        let txt_record_value = sentry_protocol_client::crypto::sha256_b64(key_authorization.as_bytes());
 
         let domain = body["identifier"]["value"]
             .as_str()
@@ -499,7 +499,7 @@ fn build_jws_body_jwk(
     payload: &Value,
     key: &PrivateKey,
 ) -> anyhow::Result<Value> {
-    let header = crate::jws::JWSHeader::with_alg(key.kt.get_key_alg());
+    let header = sentry_protocol_client::jws::JWSHeader::with_alg(key.kt.get_key_alg());
     let protected_b64 = encode_b64(protected.to_string().as_bytes());
     let payload_b64 = encode_b64(payload.to_string().as_bytes());
     let signing_input = format!("{}.{}", protected_b64, payload_b64);
@@ -518,7 +518,7 @@ fn build_jws_body_kid(
     payload: &Value,
     key: &PrivateKey,
 ) -> anyhow::Result<Value> {
-    let header = crate::jws::JWSHeader::with_alg(key.kt.get_key_alg());
+    let header = sentry_protocol_client::jws::JWSHeader::with_alg(key.kt.get_key_alg());
     let protected_b64 = encode_b64(protected.to_string().as_bytes());
     let payload_b64 = encode_b64(payload.to_string().as_bytes());
     let signing_input = format!("{}.{}", protected_b64, payload_b64);
@@ -533,7 +533,7 @@ fn build_jws_body_kid(
 }
 
 fn build_jws_body_kid_post_as_get(protected: Value, key: &PrivateKey) -> anyhow::Result<Value> {
-    let header = crate::jws::JWSHeader::with_alg(key.kt.get_key_alg());
+    let header = sentry_protocol_client::jws::JWSHeader::with_alg(key.kt.get_key_alg());
     let protected_b64 = encode_b64(protected.to_string().as_bytes());
     // POST-as-GET: payload is the empty string, not even a JSON null
     let payload_b64 = encode_b64(b"");

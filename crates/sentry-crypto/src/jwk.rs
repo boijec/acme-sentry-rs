@@ -1,9 +1,9 @@
-use crate::encoding::decode_b64;
-use crate::error::{JwkError, KeyError};
-use crate::ssl_common::big_num_from_vec;
 use openssl::bn::BigNumRef;
 use openssl::pkey::{PKey, Public};
 use openssl::rsa::Rsa;
+use crate::encoding::decode_b64;
+use crate::error::{JwkError, KeyError};
+use crate::ssl_common::big_num_from_vec;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -54,7 +54,7 @@ impl GenericJWK {
 ///
 /// If coordinate needs to have length 7 bytes, the resulting vector *has* to be:
 /// [0, 0, 215, 215, 215, 215, 215]
-pub(crate) fn fast_padded_coordinate_vector(key_coordinate: &BigNumRef, coordinate_size: usize) -> Vec<u8> {
+pub fn fast_padded_coordinate_vector(key_coordinate: &BigNumRef, coordinate_size: usize) -> Vec<u8> {
     let coordinate_vector = key_coordinate.to_vec();
     if coordinate_vector.len() == coordinate_size {
         return coordinate_vector;

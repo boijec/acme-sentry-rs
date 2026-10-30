@@ -3,6 +3,7 @@ use tracing::info;
 use sentry_core::config::ApplicationConfig;
 use sentry_job_engine::scheduling::SchedulerHandle;
 use crate::error::ServerError;
+use crate::orders;
 
 pub async fn start_http_server(application_config: &ApplicationConfig, handle: SchedulerHandle<'_>) -> Result<(), ServerError> {
     // TODO: add to yaml config / args params
@@ -11,8 +12,8 @@ pub async fn start_http_server(application_config: &ApplicationConfig, handle: S
     let server = HttpServer::new(move || {
         App::new()
             .app_data(scheduler_data.clone())
-            .route("/orders", web::post().to(http_server::post_new_order))
-            .route("/account", web::get().to(http_server::check_account_status))
+            .app_data(application_config)
+            .route("/orders", web::post().to(orders::post_new_order))
     })
         .workers(2)
         .bind(bind_addr)

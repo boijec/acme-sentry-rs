@@ -1,5 +1,5 @@
-use crate::error::CommonsSslError;
 use openssl::bn::{BigNum, BigNumContext};
+use crate::error::CommonsSslError;
 
 pub fn big_num_from_vec(bytes: &Vec<u8>) -> Result<BigNum, CommonsSslError> {
     BigNum::from_slice(bytes)

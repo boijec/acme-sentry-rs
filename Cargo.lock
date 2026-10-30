@@ -7,9 +7,6 @@ name = "acme-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64 0.23.1",
- "hex",
- "openssl",
  "reqwest",
  "serde",
  "serde_json",
@@ -2125,6 +2122,8 @@ dependencies = [
  "actix-web",
  "sentry-core",
  "sentry-job-engine",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -2135,12 +2134,26 @@ name = "sentry-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "sentry-db",
  "sentry-io",
  "sentry-job-engine",
  "sentry-plugin-engine",
+ "serde",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "sentry-crypto"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "hex",
+ "openssl",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2148,12 +2161,10 @@ name = "sentry-db"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "sentry-tools",
  "serde",
  "sqlx",
  "thiserror 2.0.21",
  "tokio",
- "tracing",
 ]
 
 [[package]]

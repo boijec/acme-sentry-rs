@@ -10,8 +10,9 @@ license.workspace = true
 sentry-core.workspace = true
 sentry-job-engine.workspace = true
 
-
 actix-web.workspace = true
+serde_json.workspace = true
+serde.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

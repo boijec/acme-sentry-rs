@@ -1,9 +1,8 @@
+use crate::error::DatabaseError;
+use crate::util::unix_now;
 use async_trait::async_trait;
 use serde::Serialize;
 use sqlx::{FromRow, Pool, Sqlite};
-use crate::directory_repo::UserDirectory;
-use crate::error::DatabaseError;
-use crate::util::unix_now;
 
 #[derive(Serialize, FromRow)]
 pub struct Order {

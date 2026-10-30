@@ -1,13 +1,13 @@
+use openssl::ecdsa::EcdsaSig;
+use openssl::hash::MessageDigest;
+use openssl::pkey::{PKey, Public};
+use openssl::sign::Verifier;
 use crate::crypto::SupportedAlgorithm;
 use crate::encoding::{count_occurrences, decode_b64, encode_b64, remove_first};
 use crate::error::{JwkError, JwsError, KeyError};
 use crate::jwk::GenericJWK;
 use crate::keys::PrivateKey;
 use crate::ssl_common::big_num_from_slice;
-use openssl::ecdsa::EcdsaSig;
-use openssl::hash::MessageDigest;
-use openssl::pkey::{PKey, Public};
-use openssl::sign::Verifier;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 

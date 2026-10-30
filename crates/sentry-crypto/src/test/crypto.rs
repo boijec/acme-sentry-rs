@@ -1,5 +1,5 @@
-use crate::crypto::SupportedHash;
 use openssl::sha;
+use crate::crypto::SupportedHash;
 
 #[test]
 fn test_hashing() {

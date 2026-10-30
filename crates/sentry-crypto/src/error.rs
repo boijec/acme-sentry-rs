@@ -1,6 +1,6 @@
-use crate::crypto::SupportedKey;
 use base64::DecodeError;
 use openssl::error::ErrorStack;
+use crate::crypto::SupportedKey;
 use std::ffi::c_int;
 use std::string::FromUtf8Error;
 use thiserror::Error;
@@ -59,6 +59,9 @@ pub enum KeyError {
     AffineCoordinatesError(ErrorStack),
     #[error("Error while getting Ec Group from Nid: {1} - {0}")]
     EcGroupError(ErrorStack, c_int),
+    // TODO: remove generic error
+    #[error("Generic key error: {0}")]
+    GenericKeyError(String)
 }
 
 #[derive(Error, Debug)]

@@ -1,9 +1,10 @@
-use crate::error::CryptoError;
 use openssl::hash::MessageDigest;
 use openssl::nid::Nid;
 use openssl::sha::{sha256, sha384, sha512};
+use crate::error::CryptoError;
 use serde::{Deserialize, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
+use crate::encoding::encode_b64;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SupportedKey {
@@ -165,7 +166,6 @@ pub enum SupportedHash {
 }
 
 pub fn sha256_b64(data: &[u8]) -> String {
-    use crate::encoding::encode_b64;
     encode_b64(&sha256(data))
 }
 

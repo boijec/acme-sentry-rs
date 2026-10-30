@@ -1,4 +1,3 @@
-use crate::job_execution::job_base::{Job, JobDependencies, SchedulerHandle};
 use acme_client::comms::account::AcmeAccountClient;
 use acme_client::keys::load_private_key;
 use async_trait::async_trait;
@@ -12,6 +11,10 @@ use persistence::user::AcmeUser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::info;
+use sentry_job_engine::dependencies::JobDependencies;
+use sentry_job_engine::error::JobEngineError;
+use sentry_job_engine::job::Job;
+use sentry_job_engine::scheduling::SchedulerHandle;
 
 /// Polling retries before giving up on a processing order.
 const MAX_POLL_RETRIES: u32 = 20;
@@ -47,15 +50,11 @@ impl<'a> Job<'a> for DownloadCertificateJob {
         "download-certificate-job"
     }
 
-    fn payload(&self) -> Value {
-        serde_json::to_value(self).unwrap()
-    }
-
     fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
         return;
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> anyhow::Result<()> {
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
         let conn = DatabaseConnection::get_connection()
             .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
 

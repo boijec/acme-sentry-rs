@@ -1,6 +1,6 @@
-use crate::keys::PrivateKey;
 use openssl::hash::MessageDigest;
 use openssl::x509::{X509NameBuilder, X509Req, X509ReqBuilder};
+use crate::keys::PrivateKey;
 use std::error::Error;
 
 // TODO: remove allow

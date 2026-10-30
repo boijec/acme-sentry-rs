@@ -1,16 +1,13 @@
-use crate::acme_jobs::accept_dns_challenge::AcceptDnsChallengeJob;
-use crate::job_execution::job_base::{Job, JobDependencies, SchedulerHandle};
 use acme_client::comms::account::AcmeAccountClient;
 use acme_client::keys::load_private_key;
 use async_trait::async_trait;
-use persistence::account_link::AcmeAccountLink;
-use persistence::database::DatabaseConnection;
-use persistence::directory::AcmeDirectory;
-use persistence::order::AcmeOrder;
-use persistence::user::AcmeUser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::info;
+use sentry_job_engine::dependencies::JobDependencies;
+use sentry_job_engine::error::JobEngineError;
+use sentry_job_engine::job::Job;
+use sentry_job_engine::scheduling::SchedulerHandle;
 
 #[derive(Serialize, Deserialize)]
 pub struct PlaceOrderJob {
@@ -22,6 +19,32 @@ impl PlaceOrderJob {
     pub fn new(user_id: String, domain: String) -> Self {
         PlaceOrderJob { user_id, domain }
     }
+    pub fn builder() -> PlaceOrderJobBuilder {
+        PlaceOrderJobBuilder::default()
+    }
+}
+
+#[derive(Default)]
+pub struct PlaceOrderJobBuilder {
+    user_id: String,
+    domain: String,
+}
+
+impl PlaceOrderJobBuilder {
+    pub fn user_id(mut self, user_id: &str) -> Self {
+        self.user_id = user_id.to_string();
+        self
+    }
+    pub fn domain(mut self, domain: &str) -> Self {
+        self.domain = domain.to_string();
+        self
+    }
+    pub fn build(self) -> PlaceOrderJob {
+        PlaceOrderJob {
+            user_id: self.user_id,
+            domain: self.domain,
+        }
+    }
 }
 
 #[async_trait]
@@ -30,15 +53,11 @@ impl<'a> Job<'a> for PlaceOrderJob {
         "place-order-job"
     }
 
-    fn payload(&self) -> Value {
-        serde_json::to_value(self).unwrap()
-    }
-
     fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
         return;
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> anyhow::Result<()> {
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
         let conn = DatabaseConnection::get_connection()
             .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
 

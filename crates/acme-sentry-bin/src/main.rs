@@ -1,4 +1,4 @@
-use crate::config_parsing::{Args, write_application_config};
+use crate::config_parsing::{Args, build_application_config};
 use clap::{Parser, crate_version};
 use sentry_core::config::ApplicationConfig;
 use sentry_io::fs::BasicUnixFileSystem;
@@ -6,7 +6,11 @@ use sentry_job_engine::dependencies::JobDependencies;
 use std::sync::Arc;
 use tracing::{info, info_span, Instrument, Span};
 use sentry_api::server::start_http_server;
+use sentry_core::jobs::directory_query::DirectoryUpdateJob;
+use sentry_core::jobs::initialize_keys_for_user::InitializeLocalUserJob;
+use sentry_core::jobs::login_user::LoginUserJob;
 use sentry_db::pool::connect;
+use sentry_db::repo::setup_repos;
 use sentry_job_engine::scheduling::Scheduler;
 
 mod config_parsing;
@@ -31,7 +35,7 @@ fn main() {
     if args.version {
         return;
     }
-    let conf = write_application_config(args.clone()).unwrap();
+    let conf = build_application_config(args.clone()).unwrap();
     tracing_subscriber::fmt()
         .with_max_level(conf.logging_level.unwrap())
         .init();
@@ -46,7 +50,8 @@ fn main() {
 async fn async_main(application_config: ApplicationConfig) -> anyhow::Result<()> {
     let fs = BasicUnixFileSystem::new(application_config.output_dir.as_str())?;
     let db_location = format!("{}/acme-sentry.db", application_config.base_dir.clone());
-    let _pool = connect(&db_location).await?;
+    let pool = connect(&db_location).await?;
+    let _repos = setup_repos(&pool);
     
     let (mut scheduler, handle) = Scheduler::new(32);
     scheduler.with_dependencies(
@@ -58,7 +63,6 @@ async fn async_main(application_config: ApplicationConfig) -> anyhow::Result<()>
     let scheduler_span = info_span!("scheduler", user_id = config.user_id);
     scheduler_span.follows_from(Span::current());
     let _ = tokio::spawn(scheduler.run(handle.clone()).instrument(scheduler_span));
-    handle.submit(DbInitializationJob::new()).await?;
     handle
         .submit(InitializeLocalUserJob::new(
             config.output_dir.to_string(),

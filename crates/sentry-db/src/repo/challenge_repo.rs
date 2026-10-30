@@ -15,13 +15,7 @@ pub struct DnsChallenge {
 
 #[async_trait]
 pub trait ChallengeRepo {
-    async fn create_challenge(
-        &self,
-        order_id: i64,
-        token: String,
-        key_authorization: String,
-        dns_record_name: String
-    ) -> Result<DnsChallenge, DatabaseError>;
+    async fn create_challenge(&self, order_id: i64, token: String, key_authorization: String, dns_record_name: String) -> Result<DnsChallenge, DatabaseError>;
     async fn get_for_order(&self, order_id: i64) -> Result<Option<DnsChallenge>, DatabaseError>;
     async fn set_challenge_status(&self, challenge_id: i64, status: String) -> Result<DnsChallenge, DatabaseError>;
 }
@@ -36,14 +30,9 @@ impl ChallengeRepository {
     }
 }
 
+#[async_trait]
 impl ChallengeRepo for ChallengeRepository {
-    async fn create_challenge(
-        &self,
-        order_id: i64,
-        token: String,
-        key_authorization: String,
-        dns_record_name: String
-    ) -> Result<DnsChallenge, DatabaseError> {
+    async fn create_challenge(&self, order_id: i64, token: String, key_authorization: String, dns_record_name: String) -> Result<DnsChallenge, DatabaseError> {
         let challenge = sqlx::query_as::<_, DnsChallenge>(
             r#"
                     INSERT INTO acme_dns_challenges (order_id, token, key_authorization, dns_record_name, status)

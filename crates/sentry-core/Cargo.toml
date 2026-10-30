@@ -10,8 +10,10 @@ license.workspace = true
 sentry-io.workspace = true
 sentry-job-engine.workspace = true
 sentry-plugin-engine.workspace = true
+sentry-db.workspace = true
 
 tracing.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
+serde.workspace = true
 thiserror.workspace = true
