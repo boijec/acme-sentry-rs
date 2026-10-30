@@ -1,0 +1,20 @@
+[package]
+name = "sentry-db"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+sentry-tools.workspace = true
+
+#sqlite.workspace = true
+tracing.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+sqlx.workspace = true
+async-trait.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

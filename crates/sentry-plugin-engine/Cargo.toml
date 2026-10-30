@@ -1,0 +1,13 @@
+[package]
+name = "sentry-plugin-engine"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+acme-sentry-plugin-sdk-rs.workspace = true
+
+serde.workspace = true
+tracing.workspace = true

@@ -1,0 +1,25 @@
+[package]
+name = "acme-sentry-bin"
+description = "Acme Sentry Entrypoint"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+sentry-core.workspace = true
+sentry-io.workspace = true
+sentry-tools.workspace = true
+sentry-plugin-engine.workspace = true
+sentry-job-engine.workspace = true
+sentry-api.workspace = true
+sentry-db.workspace = true
+
+clap = { workspace = true, features = ["derive", "cargo"] }
+serde_yaml.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+tokio.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "sentry-api"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+sentry-core.workspace = true
+sentry-job-engine.workspace = true
+
+
+actix-web.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
