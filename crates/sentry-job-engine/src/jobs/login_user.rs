@@ -1,26 +1,34 @@
-use acme_client::comms::account::AcmeAccountClient;
-use acme_client::keys::load_private_key;
+use crate::dependencies::JobDependencies;
+use crate::error::JobEngineError;
+use crate::job::Job;
+use crate::scheduling::SchedulerHandle;
 use async_trait::async_trait;
-use persistence::account_link::AcmeAccountLink;
-use persistence::database::DatabaseConnection;
-use persistence::directory::AcmeDirectory;
-use persistence::user::AcmeUser;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use sentry_core::config::ConfigurationMap;
+use std::sync::Arc;
 use tracing::info;
-use sentry_job_engine::dependencies::JobDependencies;
-use sentry_job_engine::error::JobEngineError;
-use sentry_job_engine::job::Job;
-use sentry_job_engine::scheduling::SchedulerHandle;
 
-#[derive(Serialize, Deserialize)]
 pub struct LoginUserJob {
-    pub user_id: String,
+    config: Option<Arc<dyn ConfigurationMap + Send + Sync>>,
+    // user_id: String,
 }
+
+#[derive(Default)]
+pub struct LoginUserJobBuilder;
 
 impl LoginUserJob {
     pub fn new(user_id: String) -> Self {
         LoginUserJob { user_id }
+    }
+    pub fn builder() -> LoginUserJobBuilder {
+        LoginUserJobBuilder::default()
+    }
+}
+
+impl LoginUserJobBuilder {
+    pub fn build(self) -> LoginUserJob {
+        LoginUserJob {
+            config: None
+        }
     }
 }
 
@@ -30,8 +38,9 @@ impl<'a> Job<'a> for LoginUserJob {
         "login-user-job"
     }
 
-    fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
-        return;
+    fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
+        let conf = dependencies.configuration();
+        self.config = Some(conf);
     }
 
     async fn execute(&self, _handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {

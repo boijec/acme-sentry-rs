@@ -23,6 +23,7 @@ pub enum FileSystemError {
 pub trait FileSystemOperations {
     fn sub_dir(&self, name: &str) -> PathBuf;
     fn ensure_sub_dir(&self, name: &str) -> Result<PathBuf, FileSystemError>;
+    fn file_exists_adaptive(&self, dir: PathBuf, file_name: &str) -> bool;
     fn file_exists(&self, dir: PathBuf, file_name: &str) -> bool;
     fn write_to_file(&self, sub_dir: &str, filename: &str, data: &[u8]) -> Result<PathBuf, FileSystemError>;
     fn read_from_file(&self, sub_dir: &str, filename: &str) -> Result<Vec<u8>, FileSystemError>;
@@ -54,8 +55,11 @@ impl FileSystemOperations for BasicUnixFileSystem {
         }
         Ok(target)
     }
-    fn file_exists(&self, dir: PathBuf, file_name: &str) -> bool {
+    fn file_exists_adaptive(&self, dir: PathBuf, file_name: &str) -> bool {
         dir.join(file_name).exists()
+    }
+    fn file_exists(&self, dir: PathBuf, file_name: &str) -> bool {
+        self.base_dir.join(dir).join(file_name).exists()
     }
     fn write_to_file(&self, sub_dir: &str, filename: &str, data: &[u8]) -> Result<PathBuf, FileSystemError> {
         let dir = self.sub_dir(sub_dir);
@@ -66,7 +70,7 @@ impl FileSystemOperations for BasicUnixFileSystem {
         Ok(file_path)
     }
     fn read_from_file(&self, sub_dir: &str, filename: &str) -> Result<Vec<u8>, FileSystemError> {
-        let dir = self.sub_dir(sub_dir);
+        let dir = self.base_dir.join(self.sub_dir(sub_dir));
         let file_path = dir.join(filename);
         debug!("Reading file: {}", file_path.display());
         let vec = fs::read(&file_path)

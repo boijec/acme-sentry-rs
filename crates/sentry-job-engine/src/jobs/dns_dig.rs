@@ -1,19 +1,13 @@
+use crate::dependencies::JobDependencies;
+use crate::error::JobEngineError;
+use crate::job::Job;
+use crate::scheduling::SchedulerHandle;
 use async_trait::async_trait;
-use persistence::challenge::AcmeDnsChallenge;
-use persistence::database::DatabaseConnection;
-use persistence::order::AcmeOrder;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tracing::{info, warn};
-use sentry_job_engine::dependencies::JobDependencies;
-use sentry_job_engine::error::JobEngineError;
-use sentry_job_engine::job::Job;
-use sentry_job_engine::scheduling::SchedulerHandle;
 
 /// Maximum number of polling retries before giving up on DNS propagation.
 const MAX_DIG_RETRIES: u32 = 30;
 
-#[derive(Serialize, Deserialize)]
 pub struct DnsDigJob {
     pub order_id: i64,
     pub user_id: String,

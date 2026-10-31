@@ -1,15 +1,10 @@
-use acme_client::comms::account::AcmeAccountClient;
-use acme_client::keys::load_private_key;
+use crate::dependencies::JobDependencies;
+use crate::error::JobEngineError;
+use crate::job::Job;
+use crate::scheduling::SchedulerHandle;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tracing::info;
-use sentry_job_engine::dependencies::JobDependencies;
-use sentry_job_engine::error::JobEngineError;
-use sentry_job_engine::job::Job;
-use sentry_job_engine::scheduling::SchedulerHandle;
 
-#[derive(Serialize, Deserialize)]
 pub struct PlaceOrderJob {
     pub user_id: String,
     pub domain: String,

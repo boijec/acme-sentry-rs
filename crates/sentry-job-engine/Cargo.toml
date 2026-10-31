@@ -8,8 +8,16 @@ license.workspace = true
 
 [dependencies]
 sentry-io.workspace = true
+sentry-common.workspace = true
+sentry-core.workspace = true
+sentry-plugin-engine.workspace = true
+sentry-db.workspace = true
+sentry-crypto.workspace = true
+sentry-jose.workspace = true
 
 tracing.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 thiserror.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true

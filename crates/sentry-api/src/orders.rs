@@ -1,11 +1,11 @@
-use actix_web::{web, Responder, HttpResponse};
 use actix_web::dev::AppConfig;
+use actix_web::{HttpResponse, Responder, web};
+use sentry_core::config::ApplicationConfig;
+use sentry_job_engine::jobs::place_order::PlaceOrderJob;
+use sentry_job_engine::scheduling::SchedulerHandle;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::info;
-use sentry_core::config::ApplicationConfig;
-use sentry_core::jobs::place_order::PlaceOrderJob;
-use sentry_job_engine::scheduling::SchedulerHandle;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NewOrderRequest {

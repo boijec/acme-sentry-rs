@@ -1,9 +1,9 @@
+use sentry_crypto::crypto::SupportedKey;
+use sentry_crypto::encoding::{decode_b64, encode_b64};
 use openssl::bn::BigNum;
 use openssl::rsa::Rsa;
-use crate::crypto::SupportedKey;
-use crate::encoding::{decode_b64, encode_b64};
-use crate::keys::{PrivateKey, gen_ec, gen_ed, gen_rsa};
 use serde::Deserialize;
+use crate::keys::{gen_ec, gen_ed, gen_rsa, PrivateKey};
 
 // Only used in tests, since we don't really care to serialize the jwk (yet...)
 #[derive(Deserialize, Debug)]

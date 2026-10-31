@@ -1,15 +1,16 @@
+use crate::error::KeyError;
+use crate::error::KeyError::JWKFormattingError;
+use crate::jwk::fast_padded_coordinate_vector;
+use crate::jws::JwsHeader;
 use openssl::ec::{EcGroup, EcKey};
 use openssl::ecdsa::EcdsaSig;
 use openssl::pkey::{PKey, Private};
 use openssl::rsa::Rsa;
 use openssl::sign::Signer;
-use crate::crypto::{SupportedHash, SupportedKey};
-use crate::encoding::encode_b64;
-use crate::error::KeyError::JWKFormattingError;
-use crate::error::{CryptoError, KeyError};
-use crate::jwk::fast_padded_coordinate_vector;
-use crate::jws::JWSHeader;
-use crate::ssl_common::{get_big_num, get_big_num_context};
+use sentry_crypto::crypto::{SupportedHash, SupportedKey};
+use sentry_crypto::encoding::encode_b64;
+use sentry_crypto::error::CryptoError;
+use sentry_crypto::ssl_common::{get_big_num, get_big_num_context};
 use serde_json::json;
 
 pub struct PrivateKey {
@@ -117,7 +118,7 @@ impl PrivateKey {
         }))
     }
 
-    pub fn sign(&self, header: &JWSHeader, jws_data: &String) -> Result<Vec<u8>, KeyError> {
+    pub fn sign(&self, header: &JwsHeader, jws_data: &String) -> Result<Vec<u8>, KeyError> {
         match self.kt {
             SupportedKey::Rsa2048 | SupportedKey::Rsa4096 => {
                 Ok(self.sign_rsa(jws_data)?)
@@ -165,7 +166,7 @@ impl PrivateKey {
         )
     }
 
-    fn sign_elliptic_curve(&self, header: &JWSHeader, data: &String) -> Result<Vec<u8>, KeyError> {
+    fn sign_elliptic_curve(&self, header: &JwsHeader, data: &String) -> Result<Vec<u8>, KeyError> {
         let hash = header.get_alg().get_hash().hash(data.as_bytes());
         let signer = EcdsaSig::sign(&hash, &self.k.ec_key()
             .map_err(|e| KeyError::KeySigningError(e, self.kt.to_string().to_string()))?
@@ -186,18 +187,6 @@ impl PrivateKey {
                 .map_err(|e| KeyError::KeySigningError(e, self.kt.to_string().to_string()))?
         )
     }
-}
-
-// TODO: refactor with more coherent errors
-pub fn load_private_key(user_id: &str, key_path: &str, key_type: &str) -> Result<PrivateKey, KeyError> {
-    let absolute_key_path = key_path.to_owned() + "/" + user_id + ".pem";
-    let pem_bytes = std::fs::read(absolute_key_path)
-        .map_err(|e| KeyError::GenericKeyError("Failed to read PEM".to_string()))?;
-    let supported_key = SupportedKey::from_str(key_type)
-        .map_err(|e| KeyError::GenericKeyError("Unsupported key type".to_string()))?;
-    let private_key = PrivateKey::load_private_bytes(&pem_bytes, supported_key)
-        .map_err(|e| KeyError::GenericKeyError("Failed to load private key".to_string()))?;
-    Ok(private_key)
 }
 
 pub fn gen_rsa(key_length: u32) -> Result<PKey<Private>, KeyError> {

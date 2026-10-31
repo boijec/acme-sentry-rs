@@ -1,25 +1,13 @@
-use acme_client::comms::account::AcmeAccountClient;
-use acme_client::keys::load_private_key;
 use async_trait::async_trait;
-use common_utils::APPLICATION_CONFIG;
-use persistence::account_link::AcmeAccountLink;
-use persistence::certificate::AcmeCertificate;
-use persistence::database::DatabaseConnection;
-use persistence::directory::AcmeDirectory;
-use persistence::order::AcmeOrder;
-use persistence::user::AcmeUser;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tracing::info;
-use sentry_job_engine::dependencies::JobDependencies;
-use sentry_job_engine::error::JobEngineError;
-use sentry_job_engine::job::Job;
-use sentry_job_engine::scheduling::SchedulerHandle;
+use crate::dependencies::JobDependencies;
+use crate::error::JobEngineError;
+use crate::job::Job;
+use crate::scheduling::SchedulerHandle;
 
 /// Polling retries before giving up on a processing order.
 const MAX_POLL_RETRIES: u32 = 20;
 
-#[derive(Serialize, Deserialize)]
 pub struct DownloadCertificateJob {
     pub order_id: i64,
     pub user_id: String,

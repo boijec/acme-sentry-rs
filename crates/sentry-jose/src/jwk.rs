@@ -1,9 +1,9 @@
+use crate::error::{JwkError, KeyError};
 use openssl::bn::BigNumRef;
 use openssl::pkey::{PKey, Public};
 use openssl::rsa::Rsa;
-use crate::encoding::decode_b64;
-use crate::error::{JwkError, KeyError};
-use crate::ssl_common::big_num_from_vec;
+use sentry_crypto::encoding::decode_b64;
+use sentry_crypto::ssl_common::big_num_from_vec;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

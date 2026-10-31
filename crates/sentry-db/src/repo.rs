@@ -15,12 +15,33 @@ pub mod challenge_repo;
 pub mod order_repo;
 
 pub struct DatabaseRepositories {
-    user_repo: Arc<dyn UserRepo>,
-    directory_repo: Arc<dyn DirectoryRepo>,
-    account_link_repo: Arc<dyn AccountLinkRepo>,
-    certificate_repo: Arc<dyn CertificateRepo>,
-    challenge_repo: Arc<dyn ChallengeRepo>,
-    order_repo: Arc<dyn OrderRepo>,
+    user_repo: Arc<dyn UserRepo + Send + Sync>,
+    directory_repo: Arc<dyn DirectoryRepo + Send + Sync>,
+    account_link_repo: Arc<dyn AccountLinkRepo + Send + Sync>,
+    certificate_repo: Arc<dyn CertificateRepo + Send + Sync>,
+    challenge_repo: Arc<dyn ChallengeRepo + Send + Sync>,
+    order_repo: Arc<dyn OrderRepo + Send + Sync>,
+}
+
+impl DatabaseRepositories {
+    pub fn user_repo(&self) -> Arc<dyn UserRepo + Send + Sync> {
+        self.user_repo.clone()
+    }
+    pub fn directory_repo(&self) -> Arc<dyn DirectoryRepo + Send + Sync> {
+        self.directory_repo.clone()
+    }
+    pub fn account_link_repo(&self) -> Arc<dyn AccountLinkRepo + Send + Sync> {
+        self.account_link_repo.clone()
+    }
+    pub fn certificate_repo(&self) -> Arc<dyn CertificateRepo + Send + Sync> {
+        self.certificate_repo.clone()
+    }
+    pub fn challenge_repo(&self) -> Arc<dyn ChallengeRepo + Send + Sync> {
+        self.challenge_repo.clone()
+    }
+    pub fn order_repo(&self) -> Arc<dyn OrderRepo + Send + Sync> {
+        self.order_repo.clone()
+    }
 }
 
 pub fn setup_repos(pool: &Pool<Sqlite>) -> DatabaseRepositories {

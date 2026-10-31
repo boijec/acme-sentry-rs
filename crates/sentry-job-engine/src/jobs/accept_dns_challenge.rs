@@ -1,25 +1,19 @@
+use crate::dependencies::JobDependencies;
+use crate::error::JobEngineError;
+use crate::job::Job;
 use crate::jobs::dns_dig::DnsDigJob;
-use sentry_job_engine::job::Job;
-use sentry_job_engine::dependencies::JobDependencies;
-use sentry_job_engine::scheduling::SchedulerHandle;
+use crate::scheduling::SchedulerHandle;
+use async_trait::async_trait;
+use sentry_core::config::ConfigurationMap;
 use sentry_plugin_engine::loader::{SetConfig, run_plugin};
 use sentry_plugin_engine::run_mode::{DiscoveryType, RunMode};
-use acme_client::comms::account::AcmeAccountClient;
-use acme_client::keys::load_private_key;
-use async_trait::async_trait;
-use common_utils::APPLICATION_CONFIG;
-use persistence::account_link::AcmeAccountLink;
-use persistence::challenge::AcmeDnsChallenge;
-use persistence::database::DatabaseConnection;
-use persistence::directory::AcmeDirectory;
-use persistence::order::AcmeOrder;
-use persistence::user::AcmeUser;
+use std::sync::Arc;
 use tracing::warn;
-use sentry_job_engine::error::JobEngineError;
 
 pub struct AcceptDnsChallengeJob {
-    pub order_id: i64,
-    pub user_id: String,
+    config: Option<Arc<dyn ConfigurationMap + Send + Sync>>,
+    // order_id: i64,
+    // user_id: String,
 }
 
 #[derive(Default)]

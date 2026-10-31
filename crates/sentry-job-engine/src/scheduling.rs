@@ -2,6 +2,7 @@ use crate::dependencies::JobDependencies;
 use crate::job::Job;
 use tokio::sync::{mpsc, oneshot, watch};
 use tracing::{Instrument, error, info, warn};
+use crate::error::JobEngineError;
 
 enum SchedulerMessage<'a> {
     Job(Box<dyn Job<'a>>),
@@ -13,11 +14,11 @@ pub struct SchedulerHandle<'a> {
     shutdown_rx: watch::Receiver<bool>,
 }
 impl<'a> SchedulerHandle<'a> {
-    pub async fn submit<J: Job<'a>>(&self, job: J) -> Result<(), &'static str> {
+    pub async fn submit<J: Job<'a>>(&self, job: J) -> Result<(), JobEngineError> {
         self.sender
             .send(SchedulerMessage::Job(Box::new(job)))
             .await
-            .map_err(|_| "Scheduler is shut down")
+            .map_err(|_| JobEngineError::SchedulingError("Scheduler is shutting down".into()))
     }
     pub async fn shutdown(self) {
         let rx = self.internal_shutdown().await;

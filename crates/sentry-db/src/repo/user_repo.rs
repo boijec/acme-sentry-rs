@@ -12,6 +12,24 @@ pub struct User {
     user_dump_path: String,
 }
 
+impl User {
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+    pub fn user_id(&self) -> &str {
+        &self.user_id
+    }
+    pub fn key_type(&self) -> &str {
+        &self.key_type
+    }
+    pub fn key_path(&self) -> &str {
+        &self.key_path
+    }
+    pub fn user_dump_path(&self) -> &str {
+        &self.user_dump_path
+    }
+}
+
 #[async_trait]
 pub trait UserRepo {
     async fn get_user(&self, user_id: &str) -> Result<Option<User>, DatabaseError>;

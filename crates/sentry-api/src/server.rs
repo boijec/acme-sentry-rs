@@ -1,11 +1,13 @@
-use actix_web::{web, HttpServer, App};
-use tracing::info;
-use sentry_core::config::ApplicationConfig;
-use sentry_job_engine::scheduling::SchedulerHandle;
 use crate::error::ServerError;
 use crate::orders;
+use actix_web::{App, HttpServer, web};
+use sentry_core::config::ApplicationConfig;
+use sentry_core::services::Services;
+use sentry_job_engine::scheduling::SchedulerHandle;
+use std::sync::Arc;
+use tracing::info;
 
-pub async fn start_http_server(application_config: &ApplicationConfig, handle: SchedulerHandle<'_>) -> Result<(), ServerError> {
+pub async fn start_http_server(application_config: Arc<ApplicationConfig>, handle: SchedulerHandle<'_>, services: Arc<Services>) -> Result<(), ServerError> {
     // TODO: add to yaml config / args params
     let bind_addr = "0.0.0.0:8080";
     let scheduler_data = web::Data::new(handle.clone());
@@ -13,6 +15,7 @@ pub async fn start_http_server(application_config: &ApplicationConfig, handle: S
         App::new()
             .app_data(scheduler_data.clone())
             .app_data(application_config)
+            .app_data(services)
             .route("/orders", web::post().to(orders::post_new_order))
     })
         .workers(2)

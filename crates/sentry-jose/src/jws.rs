@@ -1,23 +1,23 @@
+use crate::error::{JwkError, JwsError, KeyError};
+use crate::jwk::GenericJWK;
+use crate::keys::PrivateKey;
 use openssl::ecdsa::EcdsaSig;
 use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Public};
 use openssl::sign::Verifier;
-use crate::crypto::SupportedAlgorithm;
-use crate::encoding::{count_occurrences, decode_b64, encode_b64, remove_first};
-use crate::error::{JwkError, JwsError, KeyError};
-use crate::jwk::GenericJWK;
-use crate::keys::PrivateKey;
-use crate::ssl_common::big_num_from_slice;
+use sentry_crypto::crypto::SupportedAlgorithm;
+use sentry_crypto::encoding::{count_occurrences, decode_b64, encode_b64, remove_first};
+use sentry_crypto::ssl_common::big_num_from_slice;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-pub struct JWS {
-    header: JWSHeader,
+pub struct Jws {
+    header: JwsHeader,
     payload: Value,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct JWSHeader {
+pub struct JwsHeader {
     alg: SupportedAlgorithm,
     kid: Option<String>,
     jwk: Option<Value>,
@@ -25,10 +25,10 @@ pub struct JWSHeader {
     url: Option<String>,
 }
 
-impl JWSHeader {
+impl JwsHeader {
     // bad idea, find something else... this will be impacted by the "directory" communication.
     pub fn with_alg(alg: SupportedAlgorithm) -> Self {
-        JWSHeader {
+        JwsHeader {
             alg,
             kid: None,
             jwk: None,
@@ -64,9 +64,9 @@ impl JWSHeader {
     }
 }
 
-impl JWS {
-    pub fn with_header_and_payload(header: JWSHeader, payload: Value) -> Self {
-        JWS { header, payload }
+impl Jws {
+    pub fn with_header_and_payload(header: JwsHeader, payload: Value) -> Self {
+        Jws { header, payload }
     }
 
     pub fn get_payload(&self) -> &Value {
@@ -83,7 +83,7 @@ impl JWS {
 
     pub fn parse(
         content: &String,
-    ) -> Result<Option<JWS>, JwsError> {
+    ) -> Result<Option<Jws>, JwsError> {
         if count_occurrences(content, '.') != 2 {
             return Err(JwsError::JwsElementParseError("Error encountered when parsing JWS, JWS parts formatting is invalid".to_string()));
         }
@@ -94,7 +94,7 @@ impl JWS {
 
         let header_bytes = decode_b64(header)?;
         let header_string = String::from_utf8(header_bytes)?;
-        let header = JWSHeader::from_string(header_string)?;
+        let header = JwsHeader::from_string(header_string)?;
 
         let h_temp = header.clone();
         let key = match h_temp.jwk {
@@ -108,12 +108,12 @@ impl JWS {
 
         let payload_bytes = decode_b64(remove_first(payload))?;
         let payload = serde_json::from_str(String::from_utf8(payload_bytes)?.as_str())?;
-        Ok(Some(JWS { header, payload }))
+        Ok(Some(Jws { header, payload }))
     }
 
     pub fn parse_flat(
         value: &Value,
-    ) -> Result<Option<JWS>, JwsError> {
+    ) -> Result<Option<Jws>, JwsError> {
         let protected_b64 = value["protected"]
             .as_str()
             .ok_or(JwsError::JwsElementParseError("Flat JWS missing 'protected' field".to_string()))?;
@@ -126,7 +126,7 @@ impl JWS {
 
         let header_bytes = decode_b64(protected_b64)?;
         let header_string = String::from_utf8(header_bytes)?;
-        let header = JWSHeader::from_string(header_string)?;
+        let header = JwsHeader::from_string(header_string)?;
 
         let h_temp = header.clone();
         let key = match h_temp.jwk {
@@ -148,7 +148,7 @@ impl JWS {
             serde_json::from_str(String::from_utf8(payload_bytes)?.as_str())?
         };
 
-        Ok(Some(JWS { header, payload }))
+        Ok(Some(Jws { header, payload }))
     }
 
     fn verify(

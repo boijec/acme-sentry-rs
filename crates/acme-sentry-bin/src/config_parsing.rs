@@ -113,31 +113,32 @@ pub(crate) fn build_application_config(args: Args) -> anyhow::Result<Application
         let plugin_dir = yaml_config.acme_sentry_configuration.fs.acme_plugin;
         let discovery_type =
             check_plugins_directory(plugin_dir.as_str()).map_err(|e| anyhow!("{:?}", e))?;
-        let mut builder = ApplicationConfig::builder();
-        builder
-            .application_mode(application_mode)
-            .user_id(yaml_config
-                .acme_sentry_configuration
-                .user
-                .id
-                .unwrap_or(InternalIdTooling::new_compact_id()))
-            .user_email(yaml_config.acme_sentry_configuration.user.email)
-            .key_type(yaml_config.acme_sentry_configuration.user.key_type)
-            .logging_level(yaml_config.acme_sentry_configuration.logging.logging_level)
-            .base_dir(yaml_config.acme_sentry_configuration.fs.base_dir.clone())
-            .acme_challenge_plugin(plugin_dir)
-            .discovery_type(discovery_type.into())
-            .output_dir(
-                PathBuf::from_str(
-                    yaml_config.acme_sentry_configuration.fs.base_dir.as_str(),
-                )?
-                    .join(yaml_config.acme_sentry_configuration.fs.output_dir.as_str())
-                    .to_str()
-                    .unwrap()
-                    .to_string()
-            )
-            .base_url(yaml_config.acme_sentry_configuration.base_url);
-        Ok(builder.build())
+        Ok(
+            ApplicationConfig::builder()
+                .application_mode(application_mode)
+                .user_id(yaml_config
+                    .acme_sentry_configuration
+                    .user
+                    .id
+                    .unwrap_or(InternalIdTooling::new_compact_id()))
+                .user_email(yaml_config.acme_sentry_configuration.user.email)
+                .key_type(yaml_config.acme_sentry_configuration.user.key_type)
+                .logging_level(yaml_config.acme_sentry_configuration.logging.logging_level)
+                .base_dir(yaml_config.acme_sentry_configuration.fs.base_dir.clone())
+                .acme_challenge_plugin(plugin_dir)
+                .discovery_type(discovery_type.into())
+                .output_dir(
+                    PathBuf::from_str(
+                        yaml_config.acme_sentry_configuration.fs.base_dir.as_str(),
+                    )?
+                        .join(yaml_config.acme_sentry_configuration.fs.output_dir.as_str())
+                        .to_str()
+                        .unwrap()
+                        .to_string()
+                )
+                .base_url(yaml_config.acme_sentry_configuration.base_url)
+                .build()
+        )
     } else {
         let email = args.with_email;
         if args.with_challenge_plugins.is_none() {
@@ -146,25 +147,26 @@ pub(crate) fn build_application_config(args: Args) -> anyhow::Result<Application
         let plugin_dir = args.with_challenge_plugins.unwrap();
         let discovery_type =
             check_plugins_directory(plugin_dir.as_str()).map_err(|e| anyhow!("{:?}", e))?;
-        let mut builder = ApplicationConfig::builder();
-        builder
-            .application_mode(application_mode)
-            .user_id(args
-                .with_user_id
-                .unwrap_or(InternalIdTooling::new_compact_id()))
-            .user_email(email.unwrap())
-            .key_type(args.requested_login_key_type)
-            .logging_level(Some(args.logging_level))
-            .base_dir(args.base_dir.clone())
-            .acme_challenge_plugin(plugin_dir)
-            .discovery_type(discovery_type.into())
-            .output_dir(PathBuf::from_str(args.base_dir.as_str())?
-                .join(args.output_dir.as_str())
-                .to_str()
-                .unwrap()
-                .to_string())
-            .base_url(args.acme_base_url.unwrap());
-        Ok(builder.build())
+        Ok(
+            ApplicationConfig::builder()
+                .application_mode(application_mode)
+                .user_id(args
+                    .with_user_id
+                    .unwrap_or(InternalIdTooling::new_compact_id()))
+                .user_email(email.unwrap())
+                .key_type(args.requested_login_key_type)
+                .logging_level(Some(args.logging_level))
+                .base_dir(args.base_dir.clone())
+                .acme_challenge_plugin(plugin_dir)
+                .discovery_type(discovery_type.into())
+                .output_dir(PathBuf::from_str(args.base_dir.as_str())?
+                    .join(args.output_dir.as_str())
+                    .to_str()
+                    .unwrap()
+                    .to_string())
+                .base_url(args.acme_base_url.unwrap())
+                .build()
+        )
     }
 }
 

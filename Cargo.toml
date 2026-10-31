@@ -18,8 +18,9 @@ sentry-db = { path = "crates/sentry-db" }
 sentry-io = { path = "crates/sentry-io" }
 sentry-plugin-engine = { path = "crates/sentry-plugin-engine" }
 sentry-job-engine = { path = "crates/sentry-job-engine" }
-sentry-tools = { path = "crates/sentry-tools" }
+sentry-common = { path = "crates/sentry-common" }
 sentry-crypto = { path = "crates/sentry-crypto" }
+sentry-jose = { path = "crates/sentry-jose" }
 
 acme-sentry-plugin-sdk-rs = { git = "https://github.com/boijec/acme-sentry-plugin-sdk-rs" }
 

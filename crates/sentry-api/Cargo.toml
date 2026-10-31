@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 sentry-core.workspace = true
 sentry-job-engine.workspace = true
+sentry-common.workspace = true
 
 actix-web.workspace = true
 serde_json.workspace = true

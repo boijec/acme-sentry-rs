@@ -10,7 +10,7 @@ license.workspace = true
 [dependencies]
 sentry-core.workspace = true
 sentry-io.workspace = true
-sentry-tools.workspace = true
+sentry-common.workspace = true
 sentry-plugin-engine.workspace = true
 sentry-job-engine.workspace = true
 sentry-api.workspace = true
