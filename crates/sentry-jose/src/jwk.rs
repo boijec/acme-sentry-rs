@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GenericJWK {
+pub struct GenericJwk {
     alg: String,
     kty: String,
     crv: Option<String>,
@@ -17,7 +17,7 @@ pub struct GenericJWK {
     e: Option<String>,
     n: Option<String>,
 }
-impl GenericJWK {
+impl GenericJwk {
     pub fn from_value(jwk: Value) -> Result<Self, JwkError> {
         Ok(serde_json::from_value(jwk)?)
     }

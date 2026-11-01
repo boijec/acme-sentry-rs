@@ -3,17 +3,6 @@
 version = 4
 
 [[package]]
-name = "acme-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "thiserror",
- "tracing",
-]
-
-[[package]]
 name = "acme-sentry-bin"
 version = "0.1.0"
 dependencies = [
@@ -2180,6 +2169,7 @@ dependencies = [
  "sentry-io",
  "sentry-jose",
  "sentry-plugin-engine",
+ "sentry-rfc8555",
  "serde_json",
  "thiserror",
  "tokio",
@@ -2204,6 +2194,19 @@ version = "0.1.0"
 dependencies = [
  "acme-sentry-plugin-sdk-rs",
  "serde",
+ "tracing",
+]
+
+[[package]]
+name = "sentry-rfc8555"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "sentry-crypto",
+ "sentry-jose",
+ "serde",
+ "serde_json",
+ "thiserror",
  "tracing",
 ]
 

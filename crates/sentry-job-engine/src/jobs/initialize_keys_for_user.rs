@@ -4,7 +4,6 @@ use crate::job::Job;
 use crate::scheduling::SchedulerHandle;
 use async_trait::async_trait;
 use sentry_core::config::ConfigurationMap;
-use sentry_core::services::Services;
 use sentry_core::user::model::ServiceUser;
 use sentry_core::user::service::UserService;
 use sentry_crypto::crypto::SupportedKey;
@@ -80,29 +79,36 @@ impl <'a> Job<'a> for InitializeLocalUserJob {
         self.user_service = Some(usr_service);
     }
     async fn execute(&self, _: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
-        let config = self.config.unwrap().as_ref();
-        let user_service = self.user_service.unwrap().as_ref();
-        info!("user id: {}", config.get_user_id());
-        let service_user = user_service.get_user(config.get_user_id().as_str()).await
-            .map_err(|e| JobEngineError::JobExecutionError(e.to_string()));
-        if service_user.is_err() {
-            info!("User not found, creating user entry in database..");
-            let system = self.fs.as_ref().unwrap();
-            let temp_key_path = format!("{}/login-keys/{}", self.user_id, self.key_type);
-            let path = system.ensure_sub_dir(temp_key_path.as_str()).unwrap();
-            let temp_dump_path = format!("{}", self.user_id);
-            let dump_path = system.ensure_sub_dir(temp_dump_path.as_str()).unwrap();
-            let result = AcmeUser::new_user(temp_dump_path, temp_dump_path, self.user_id.clone(), self.key_type.clone(), &connection).unwrap();
-            if let Some(acme_user) = result {
-                info!("User created: User [ id: {}, user_id: {} ] with key type: {}", acme_user.id, acme_user.user_id, acme_user.key_type);
-                user = Ok(Some(acme_user));
-            } else {
-                return Err(anyhow::anyhow!("User could not be picked back up!"));
+        if let (Some(user_service), Some(config)) = (&self.user_service, &self.config) {
+            let config = config.clone();
+            let user_service = user_service.clone();
+
+            info!("user id: {}", config.get_user_id());
+            let mut user = user_service.get_user(config.get_user_id().as_str()).await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()));
+            if user.is_err() {
+                info!("User not found, creating user entry in database..");
+                let system = self.fs.as_ref().unwrap();
+                let temp_key_path = format!("{}/login-keys/{}", config.get_user_id(), config.get_key_type());
+                let _path = system.ensure_sub_dir(temp_key_path.as_str()).unwrap();
+                let temp_dump_path = format!("{}", config.get_user_id());
+                let _dump_path = system.ensure_sub_dir(temp_dump_path.as_str()).unwrap();
+                let result = user_service.create_new_user(
+                    ServiceUser::builder()
+                        .user_id(config.get_user_id().as_str())
+                        .key_path(temp_key_path.as_str())
+                        .key_type(config.get_key_type().as_str())
+                        .user_dump_path(temp_dump_path.as_str())
+                        .build()
+                ).await
+                    .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+                user = Ok(Some(result));
             }
+            let user = user.ok().unwrap().unwrap();
+            info!("User found in database: User [ id: \"{}\", user_id: \"{}\" ]", user.id, user.user_id);
+            let _key = self.check_for_required_files(user).unwrap();
+            return Ok(())
         }
-        let user = user.unwrap().unwrap();
-        info!("User found in database: User [ id: \"{}\", user_id: \"{}\" ]", user.id, user.user_id);
-        let _key = self.check_for_required_files(user).unwrap();
-        Ok(())
+        Err(JobEngineError::JobExecutionError(String::from("No files were provided")))
     }
 }

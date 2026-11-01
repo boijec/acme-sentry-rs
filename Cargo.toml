@@ -7,11 +7,10 @@ license = "MIT"
 
 [workspace]
 resolver = "3"
-members = ["acme-client", "crates/*"]
+members = ["crates/*"]
 default-members = ["crates/acme-sentry-bin"]
 
 [workspace.dependencies]
-acme-client = { path = "./acme-client" }
 sentry-core = { path = "crates/sentry-core" }
 sentry-api = { path = "crates/sentry-api" }
 sentry-db = { path = "crates/sentry-db" }
@@ -21,6 +20,7 @@ sentry-job-engine = { path = "crates/sentry-job-engine" }
 sentry-common = { path = "crates/sentry-common" }
 sentry-crypto = { path = "crates/sentry-crypto" }
 sentry-jose = { path = "crates/sentry-jose" }
+sentry-rfc8555 = { path = "crates/sentry-rfc8555" }
 
 acme-sentry-plugin-sdk-rs = { git = "https://github.com/boijec/acme-sentry-plugin-sdk-rs" }
 

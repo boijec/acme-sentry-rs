@@ -13,6 +13,7 @@ use sentry_crypto::error::CryptoError;
 use sentry_crypto::ssl_common::{get_big_num, get_big_num_context};
 use serde_json::json;
 
+#[derive(Clone)]
 pub struct PrivateKey {
     pub kt: SupportedKey,
     pub k: PKey<Private>

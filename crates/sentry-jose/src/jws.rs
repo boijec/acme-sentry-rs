@@ -1,5 +1,5 @@
 use crate::error::{JwkError, JwsError, KeyError};
-use crate::jwk::GenericJWK;
+use crate::jwk::GenericJwk;
 use crate::keys::PrivateKey;
 use openssl::ecdsa::EcdsaSig;
 use openssl::hash::MessageDigest;
@@ -98,7 +98,7 @@ impl Jws {
 
         let h_temp = header.clone();
         let key = match h_temp.jwk {
-            Some(jwk) => GenericJWK::from_value(jwk)?.parse_pub(),
+            Some(jwk) => GenericJwk::from_value(jwk)?.parse_pub(),
             None => {
                 return Err(JwsError::from(JwkError::JwkKidNotFoundError));
             }
@@ -130,7 +130,7 @@ impl Jws {
 
         let h_temp = header.clone();
         let key = match h_temp.jwk {
-            Some(jwk) => GenericJWK::from_value(jwk)?.parse_pub(),
+            Some(jwk) => GenericJwk::from_value(jwk)?.parse_pub(),
             None => {
                 return Err(JwsError::from(JwkError::JwkKidNotFoundError));
             }

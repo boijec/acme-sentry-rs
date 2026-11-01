@@ -26,9 +26,3 @@ pub enum GenericJobError {
     #[error("{0}")]
     GenericError(String),
 }
-
-#[derive(Error, Debug)]
-pub enum HttpClientError {
-    #[error("{0}")]
-    UnableToBuildClient(#[from] reqwest::Error),
-}
