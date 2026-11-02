@@ -8,7 +8,7 @@ use sentry_db::repo::initialize_repos;
 use sentry_io::fs::BasicUnixFileSystem;
 use sentry_job_engine::dependencies::JobDependencies;
 use sentry_job_engine::jobs::preflight_start_sequence;
-use sentry_job_engine::scheduling::{Scheduler, SchedulerHandle};
+use sentry_job_engine::scheduling::Scheduler;
 use std::sync::Arc;
 use anyhow::anyhow;
 use tracing::{Instrument, Span, info, info_span};
@@ -39,8 +39,7 @@ fn main() {
     tracing_subscriber::fmt()
         .with_max_level(conf.logging_level.unwrap())
         .init();
-    let user_id = conf.user_id.clone();
-    let span = info_span!("main", user_id = user_id);
+    let span = info_span!("main");
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async_main(conf).instrument(span))
@@ -65,20 +64,30 @@ async fn async_main(application_config: ApplicationConfig) -> anyhow::Result<()>
         application_config.clone(),
         services.clone(),
     ));
-    let scheduler_span = info_span!("scheduler", user_id = application_config.user_id);
+    let scheduler_span = info_span!("scheduler");
     scheduler_span.follows_from(Span::current());
     let _ = tokio::spawn(scheduler.run(handle.clone()).instrument(scheduler_span));
 
-    preflight_start_sequence(&handle).await?;
+    let _ = preflight_start_sequence(&handle).await?;
 
     if application_config.application_mode {
         info!("Application mode has been enabled, monitoring input signals.");
-        let r = start_http_server(application_config.clone(), handle.clone(), services.clone())
+        let _ = start_http_server(application_config.clone(), handle.clone(), services.clone())
             .await
             .map_err(|err| anyhow!(err))?;
         Ok(())
     } else {
-        info!("Single shot mode enabled - application will shut down right now!");
+        info!("Single shot mode enabled triggering shutdown and waiting for queue to drain!");
+        // TODO: something like this instead?
+        /*
+        let result = handle.wait_for_completion().await;
+        match result {
+            Ok(()) => {
+                info!("Completion result reached, shutting down...");
+            },
+            Err(e) => error!("Execution error: {}", e.to_string()),
+        }
+        */
         handle.shutdown().await;
         Ok(())
     }

@@ -2,7 +2,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use tracing::debug;
+use tracing::{debug, instrument};
 
 pub struct BasicUnixFileSystem {
     base_dir: PathBuf,
@@ -61,6 +61,7 @@ impl FileSystemOperations for BasicUnixFileSystem {
     fn file_exists(&self, dir: PathBuf, file_name: &str) -> bool {
         self.base_dir.join(dir).join(file_name).exists()
     }
+    #[instrument(skip(self, sub_dir, filename, data))]
     fn write_to_file(&self, sub_dir: &str, filename: &str, data: &[u8]) -> Result<PathBuf, FileSystemError> {
         let dir = self.sub_dir(sub_dir);
         let file_path = dir.join(filename);
@@ -69,6 +70,7 @@ impl FileSystemOperations for BasicUnixFileSystem {
             .map_err(|e| FileSystemError::UnableToWriteFile(e, filename.to_string()))?;
         Ok(file_path)
     }
+    #[instrument(skip(self, sub_dir, filename))]
     fn read_from_file(&self, sub_dir: &str, filename: &str) -> Result<Vec<u8>, FileSystemError> {
         let dir = self.base_dir.join(self.sub_dir(sub_dir));
         let file_path = dir.join(filename);

@@ -7,33 +7,33 @@ use sentry_core::config::{ApplicationConfig, ConfigurationMap};
 use sentry_core::user::service::UserService;
 use std::sync::Arc;
 
-pub struct InitializeLocalUserJob {
+pub struct LoadLocalUserJob {
     config: Option<Arc<ApplicationConfig>>,
     user_service: Option<Arc<UserService>>,
 }
 
 #[derive(Default)]
-pub struct InitializeLocalUserJobBuilder {}
+pub struct LoadLocalUserJobBuilder {}
 
-impl InitializeLocalUserJobBuilder {
-    pub fn build(self) -> InitializeLocalUserJob {
-        InitializeLocalUserJob {
+impl LoadLocalUserJobBuilder {
+    pub fn build(self) -> LoadLocalUserJob {
+        LoadLocalUserJob {
             config: None,
             user_service: None,
         }
     }
 }
 
-impl InitializeLocalUserJob {
-    pub fn builder() -> InitializeLocalUserJobBuilder {
-        InitializeLocalUserJobBuilder::default()
+impl LoadLocalUserJob {
+    pub fn builder() -> LoadLocalUserJobBuilder {
+        LoadLocalUserJobBuilder::default()
     }
 }
 
 #[async_trait]
-impl<'a> Job<'a> for InitializeLocalUserJob {
+impl<'a> Job<'a> for LoadLocalUserJob {
     fn job_type(&self) -> &'a str {
-        "initialize-local-user-job"
+        "load-local-user"
     }
     fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
         let conf = dependencies.configuration();

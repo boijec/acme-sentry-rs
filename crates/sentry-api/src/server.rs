@@ -5,7 +5,7 @@ use sentry_core::config::ApplicationConfig;
 use sentry_core::services::Services;
 use sentry_job_engine::scheduling::SchedulerHandle;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{Instrument, info, info_span};
 
 // Tricking the borrow-checker by putting SchedulerHandle as static (it might as well be) but when we've gotten this far
 // the handle is going to live as long as the application is alive.
@@ -28,7 +28,8 @@ pub async fn start_http_server(application_config: Arc<ApplicationConfig>, handl
         .map_err(|e| ServerError::SentryApiError(format!("Failed to bind HTTP server to {}: {}", bind_addr, e)))?
         .run();
     let server_handle = server.handle();
-    let srv_task = tokio::spawn(server);
+    let server_span = info_span!("webserver");
+    let srv_task = tokio::spawn(server.instrument(server_span));
     info!("HTTP server listening on {}", bind_addr);
     let mut h = handle.clone();
     tokio::select! {

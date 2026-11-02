@@ -7,7 +7,7 @@ use sentry_io::fs::FileSystemOperations;
 use sentry_jose::keys::PrivateKey;
 use std::path::Path;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 
 pub struct UserService {
     configuration: Arc<ApplicationConfig>,
@@ -24,6 +24,7 @@ impl UserService {
         Self { configuration, user_repo, file_system_operations }
     }
 
+    #[instrument(skip(self, user_id))]
     pub async fn get_user(&self, user_id: &str) -> Result<Option<ServiceUser>, InternalUserServiceError> {
         if let Some(user) = self
             .user_repo
@@ -55,7 +56,7 @@ impl UserService {
             Self::build_service_user_from_service_user(user)
         )
     }
-
+    #[instrument(skip(self, user_id))]
     pub async fn lazy_load_user(&self, user_id: &str) -> Result<ServiceUser, InternalUserServiceError> {
         let optional_user = self.get_user(user_id).await?;
         if let Some(user) = optional_user {
@@ -107,6 +108,8 @@ impl UserService {
             .build()
     }
 
+
+    #[instrument(skip(self, user))]
     pub async fn user_sanity_check(&self, user: &ServiceUser) -> Result<(), InternalUserServiceError> {
         let supported_key = SupportedKey::from_str(user.key_type.as_str())?;
         info!(

@@ -1,6 +1,6 @@
 use crate::error::PreFlightError;
 //use crate::jobs::directory_query::DirectoryUpdateJob;
-use crate::jobs::initialize_keys_for_user::InitializeLocalUserJob;
+use crate::jobs::initialize_keys_for_user::LoadLocalUserJob;
 //use crate::jobs::login_user::LoginUserJob;
 use crate::scheduling::SchedulerHandle;
 
@@ -15,7 +15,7 @@ pub mod initialize_keys_for_user;
 
 pub async fn preflight_start_sequence(handle: &SchedulerHandle<'_>) -> Result<(), PreFlightError> {
     handle
-        .submit(InitializeLocalUserJob::builder().build())
+        .submit(LoadLocalUserJob::builder().build())
         .await?;
     /*handle
         .submit(DirectoryUpdateJob::builder().build())

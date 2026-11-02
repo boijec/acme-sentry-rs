@@ -1,6 +1,5 @@
-use sentry_core::config::{ApplicationConfig, ConfigurationMap};
+use sentry_core::config::ApplicationConfig;
 use sentry_core::services::Services;
-use sentry_io::fs::FileSystemOperations;
 use std::sync::Arc;
 
 pub struct JobDependencies {

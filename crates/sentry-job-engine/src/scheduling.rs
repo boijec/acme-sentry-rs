@@ -1,8 +1,8 @@
 use crate::dependencies::JobDependencies;
+use crate::error::JobEngineError;
 use crate::job::Job;
 use tokio::sync::{mpsc, oneshot, watch};
-use tracing::{Instrument, error, info, warn};
-use crate::error::JobEngineError;
+use tracing::{error, info, instrument, warn, Instrument, debug};
 
 enum SchedulerMessage<'a> {
     Job(Box<dyn Job<'a>>),
@@ -14,23 +14,29 @@ pub struct SchedulerHandle<'a> {
     shutdown_rx: watch::Receiver<bool>,
 }
 impl<'a> SchedulerHandle<'a> {
+    #[instrument(skip(self, job))]
     pub async fn submit<J: Job<'a>>(&self, job: J) -> Result<(), JobEngineError> {
-        self.sender
+        let sub = self.sender
             .send(SchedulerMessage::Job(Box::new(job)))
             .await
-            .map_err(|_| JobEngineError::SchedulingError("Scheduler is shutting down".into()))
+            .map_err(|_| JobEngineError::SchedulingError("Scheduler is shutting down".into()));
+        debug!("Message submitted to scheduler");
+        sub
     }
+    #[instrument(skip(self))]
     pub async fn shutdown(self) {
+        debug!("Shutdown initiated");
         let rx = self.internal_shutdown().await;
         rx.await.expect("Scheduler didn't confirm shutdown");
     }
-    pub async fn internal_shutdown(&self) -> oneshot::Receiver<()> {
+    #[instrument(skip(self))]
+    async fn internal_shutdown(&self) -> oneshot::Receiver<()> {
         let (tx, rx) = oneshot::channel();
         self.sender
             .send(SchedulerMessage::Shutdown(tx))
             .await
             .expect("Scheduler is already gone");
-        info!("Scheduler shutdown requested");
+        debug!("Shutdown message placed on queue");
         rx
     }
     pub async fn wait_for_shutdown(&mut self) {
@@ -79,7 +85,12 @@ impl<'a> Scheduler<'a> {
                 SchedulerMessage::Job(mut job) => {
                     if !clean_lever {
                         let job_name = job.job_type();
-                        let span = tracing::info_span!("job-message", job_name = job_name);
+                        let mut user_id = "unknown".to_string();
+                        if let Some(dependencies) = &self.dependencies {
+                            let id = dependencies.configuration().user_id.clone();
+                            user_id = id.to_string();
+                        }
+                        let span = tracing::info_span!("job-message", user_id = user_id, job_name = job_name);
                         job.inject_dependencies(self.dependencies.as_ref().unwrap());
                         span.follows_from(tracing::Span::current());
                         let job_result = job.execute(handle.clone()).instrument(span).await;
@@ -90,14 +101,18 @@ impl<'a> Scheduler<'a> {
                                 "A job in the queue has errored out queue will be alive until shutdown hook is called"
                             );
                             clean_lever = true;
+                            // maybe?
+                            // handle.clone().shutdown().await;
                         }
                     } else {
                         warn!("Scheduler ignoring job: {}", job.job_type());
                     }
                 }
                 SchedulerMessage::Shutdown(ack) => {
-                    info!("Shutdown hook triggered, draining queue...");
+                    debug!("Shutdown hook triggered, closing queue");
                     self.receiver.close();
+                    // TODO: this functionality never really gets activated.. would probably be a good
+                    //       idea to make a "place last" functionality when queue reaches end-of-mission.
                     while let Ok(msg) = self.receiver.try_recv() {
                         if let SchedulerMessage::Job(job) = msg {
                             let job_name = job.job_type();
@@ -112,7 +127,7 @@ impl<'a> Scheduler<'a> {
                         }
                     }
                     let _ = ack.send(());
-                    info!("Scheduler shutdown ack sent");
+                    debug!("Scheduler shutdown ack sent");
                     break;
                 }
             }
@@ -124,11 +139,11 @@ impl<'a> Scheduler<'a> {
 
 #[cfg(test)]
 mod tests {
-    use async_trait::async_trait;
     use crate::dependencies::JobDependencies;
     use crate::error::JobEngineError;
     use crate::job::Job;
     use crate::scheduling::{Scheduler, SchedulerHandle};
+    use async_trait::async_trait;
     use tracing::{info, instrument};
 
     #[derive(Debug)]
