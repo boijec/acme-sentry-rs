@@ -7,15 +7,20 @@ use sentry_job_engine::scheduling::SchedulerHandle;
 use std::sync::Arc;
 use tracing::info;
 
-pub async fn start_http_server(application_config: Arc<ApplicationConfig>, handle: SchedulerHandle<'_>, services: Arc<Services>) -> Result<(), ServerError> {
+// Tricking the borrow-checker by putting SchedulerHandle as static (it might as well be) but when we've gotten this far
+// the handle is going to live as long as the application is alive.
+// It's never dropped until we call shutdown, and we exit out of main.
+pub async fn start_http_server(application_config: Arc<ApplicationConfig>, handle: SchedulerHandle<'static>, services: Arc<Services>) -> Result<(), ServerError> {
     // TODO: add to yaml config / args params
     let bind_addr = "0.0.0.0:8080";
     let scheduler_data = web::Data::new(handle.clone());
+    let config = web::Data::new(application_config.clone());
+    let service_list = web::Data::new(services.clone());
     let server = HttpServer::new(move || {
         App::new()
             .app_data(scheduler_data.clone())
-            .app_data(application_config)
-            .app_data(services)
+            .app_data(config.clone())
+            .app_data(service_list.clone())
             .route("/orders", web::post().to(orders::post_new_order))
     })
         .workers(2)

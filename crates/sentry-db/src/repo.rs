@@ -44,7 +44,7 @@ impl DatabaseRepositories {
     }
 }
 
-pub fn setup_repos(pool: &Pool<Sqlite>) -> DatabaseRepositories {
+pub fn initialize_repos(pool: &Pool<Sqlite>) -> DatabaseRepositories {
     DatabaseRepositories {
         user_repo: Arc::new(UserRepository::new(pool.clone())),
         directory_repo: Arc::new(DirectoryRepository::new(pool.clone())),

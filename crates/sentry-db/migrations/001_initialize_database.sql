@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS acme_users(
     user_id TEXT(36) NOT NULL,
     key_type TEX(15) NOT NULL,
     key_path TEXT(256) NOT NULL,
+    key_name TEXT(256) NOT NULL,
     user_dump_path TEXT(256) NOT NULL
 );
 

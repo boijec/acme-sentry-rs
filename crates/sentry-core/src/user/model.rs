@@ -3,6 +3,7 @@ pub struct ServiceUser {
     pub user_id: String,
     pub key_type: String,
     pub key_path: String,
+    pub key_name: String,
     pub user_dump_path: String,
 }
 
@@ -12,6 +13,7 @@ pub struct ServiceUserBuilder {
     user_id: String,
     key_type: String,
     key_path: String,
+    key_name: String,
     user_dump_path: String,
 }
 
@@ -38,6 +40,10 @@ impl ServiceUserBuilder {
         self.key_path = key_path.to_owned();
         self
     }
+    pub fn key_name(mut self, key_name: &str) -> Self {
+        self.key_name = key_name.to_owned();
+        self
+    }
     pub fn user_dump_path(mut self, user_dump_path: &str) -> Self {
         self.user_dump_path = user_dump_path.to_owned();
         self
@@ -48,6 +54,7 @@ impl ServiceUserBuilder {
             user_id: self.user_id,
             key_type: self.key_type,
             key_path: self.key_path,
+            key_name: self.key_name,
             user_dump_path: self.user_dump_path,
         }
     }

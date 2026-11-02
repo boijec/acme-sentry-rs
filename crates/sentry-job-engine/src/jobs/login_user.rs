@@ -3,22 +3,20 @@ use crate::error::JobEngineError;
 use crate::job::Job;
 use crate::scheduling::SchedulerHandle;
 use async_trait::async_trait;
-use sentry_core::config::ConfigurationMap;
+use sentry_core::config::{ApplicationConfig, ConfigurationMap};
 use std::sync::Arc;
 use tracing::info;
+use sentry_core::user::service::UserService;
 
 pub struct LoginUserJob {
-    config: Option<Arc<dyn ConfigurationMap + Send + Sync>>,
-    // user_id: String,
+    config: Option<Arc<ApplicationConfig>>,
+    user_service: Option<Arc<UserService>>,
 }
 
 #[derive(Default)]
 pub struct LoginUserJobBuilder;
 
 impl LoginUserJob {
-    pub fn new(user_id: String) -> Self {
-        LoginUserJob { user_id }
-    }
     pub fn builder() -> LoginUserJobBuilder {
         LoginUserJobBuilder::default()
     }
@@ -27,7 +25,8 @@ impl LoginUserJob {
 impl LoginUserJobBuilder {
     pub fn build(self) -> LoginUserJob {
         LoginUserJob {
-            config: None
+            config: None,
+            user_service: None,
         }
     }
 }
@@ -41,6 +40,8 @@ impl<'a> Job<'a> for LoginUserJob {
     fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
         let conf = dependencies.configuration();
         self.config = Some(conf);
+        let user_service = dependencies.services().user_service();
+        self.user_service = Some(user_service);
     }
 
     async fn execute(&self, _handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {

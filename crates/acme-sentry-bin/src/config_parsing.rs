@@ -1,14 +1,14 @@
-use std::fs;
+use anyhow::anyhow;
 use clap::Parser;
+use sentry_common::uuid::InternalIdTooling;
+use sentry_core::config::{ApplicationConfig, ConfigBuilder};
+use sentry_plugin_engine::checkers::check_plugins_directory;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::option::Option;
 use std::path::PathBuf;
 use std::str::FromStr;
-use anyhow::anyhow;
-use tracing::{error, Level};
-use sentry_core::config::{ApplicationConfig, ConfigBuilder};
-use sentry_plugin_engine::checkers::check_plugins_directory;
-use sentry_tools::uuid::InternalIdTooling;
+use tracing::{Level, error};
 
 #[derive(Parser, Debug, Clone)]
 #[command(about, long_about = None)]

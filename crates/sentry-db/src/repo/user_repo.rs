@@ -9,6 +9,7 @@ pub struct User {
     user_id: String,
     key_type: String,
     key_path: String,
+    key_name: String,
     user_dump_path: String,
 }
 
@@ -18,6 +19,7 @@ pub struct UserBuilder {
     user_id: String,
     key_type: String,
     key_path: String,
+    key_name: String,
     user_dump_path: String,
 }
 
@@ -36,6 +38,9 @@ impl User {
     }
     pub fn key_path(&self) -> &str {
         &self.key_path
+    }
+    pub fn key_name(&self) -> &str {
+        &self.key_name
     }
     pub fn user_dump_path(&self) -> &str {
         &self.user_dump_path
@@ -59,6 +64,10 @@ impl UserBuilder {
         self.key_path = key_path.to_string();
         self
     }
+    pub fn key_name(mut self, key_name: String) -> Self {
+        self.key_name = key_name.to_string();
+        self
+    }
     pub fn user_dump_path(mut self, user_dump_path: String) -> Self {
         self.user_dump_path = user_dump_path.to_string();
         self
@@ -69,6 +78,7 @@ impl UserBuilder {
             user_id: self.user_id,
             key_type: self.key_type,
             key_path: self.key_path,
+            key_name: self.key_name,
             user_dump_path: self.user_dump_path,
         }
     }
@@ -82,6 +92,7 @@ pub trait UserRepo {
         user_id: &str,
         key_type: &str,
         key_path: &str,
+        key_name: &str,
         user_dump_path: &str,
     ) -> Result<User, DatabaseError>;
 }
@@ -101,24 +112,26 @@ impl UserRepo for UserRepository {
     async fn get_user(&self, user_id: &str) -> Result<Option<User>, DatabaseError> {
         let user = sqlx::query_as::<_, User>("SELECT * FROM acme_users WHERE user_id = $1")
             .bind(user_id)
-            .fetch_one(&self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
-        Ok(Some(user))
+        Ok(user)
     }
     async fn save_user(
         &self,
         user_id: &str,
         key_type: &str,
         key_path: &str,
+        key_name: &str,
         user_dump_path: &str,
     ) -> Result<User, DatabaseError> {
         let new_user = sqlx::query_as::<_, User>(
-            "INSERT INTO acme_users (user_id, key_type, key_path, user_dump_path) VALUES ($1, $2, $3, $4) RETURNING *"
+            "INSERT INTO acme_users (user_id, key_type, key_path, key_name, user_dump_path) VALUES ($1, $2, $3, $4, $5) RETURNING *"
         )
             .bind(user_id)
             .bind(key_type)
             .bind(key_path)
+            .bind(key_name)
             .bind(user_dump_path)
             .fetch_one(&self.pool)
             .await
