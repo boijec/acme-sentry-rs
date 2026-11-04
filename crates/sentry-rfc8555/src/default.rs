@@ -33,3 +33,7 @@ pub trait DefaultOperations {
         build_jws_body_kid_post_as_get(protected, &self.get_private_key())
     }
 }
+
+pub(crate) trait ConvertOperation<T: DefaultOperations> {
+    fn convert(self) -> T;
+}

@@ -1,33 +1,24 @@
 use crate::dependencies::JobDependencies;
 use crate::error::JobEngineError;
-use crate::job::Job;
+use crate::job::JobErrorCode::ACMES133;
+use crate::job::{Job, JobExecutionFlag};
 use crate::scheduling::SchedulerHandle;
 use async_trait::async_trait;
 use sentry_core::config::{ApplicationConfig, ConfigurationMap};
-use std::sync::Arc;
-use tracing::info;
+use sentry_core::directory::service::DirectoryService;
 use sentry_core::user::service::UserService;
+use std::sync::Arc;
 
+#[derive(Default)]
 pub struct LoginUserJob {
     config: Option<Arc<ApplicationConfig>>,
     user_service: Option<Arc<UserService>>,
+    directory_service: Option<Arc<DirectoryService>>
 }
-
-#[derive(Default)]
-pub struct LoginUserJobBuilder;
 
 impl LoginUserJob {
-    pub fn builder() -> LoginUserJobBuilder {
-        LoginUserJobBuilder::default()
-    }
-}
-
-impl LoginUserJobBuilder {
-    pub fn build(self) -> LoginUserJob {
-        LoginUserJob {
-            config: None,
-            user_service: None,
-        }
+    pub fn instantiate() -> LoginUserJob {
+        LoginUserJob::default()
     }
 }
 
@@ -38,40 +29,35 @@ impl<'a> Job<'a> for LoginUserJob {
     }
 
     fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
-        let conf = dependencies.configuration();
-        self.config = Some(conf);
-        let user_service = dependencies.services().user_service();
-        self.user_service = Some(user_service);
+        self.config = Some(dependencies.configuration());
+        self.user_service = Some(dependencies.services().user_service());
+        self.directory_service = Some(dependencies.services().directory_service());
     }
 
-    async fn execute(&self, _handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
-        let connection = DatabaseConnection::get_connection()
-            .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
+    async fn execute(&self, _handle: SchedulerHandle<'a>) -> Result<JobExecutionFlag, JobEngineError> {
+        let services = (&self.user_service, &self.config, &self.directory_service);
+        if let (
+            Some(user_service),
+            Some(config),
+            Some(directory_service)
+        ) = services {
+            let config = config.clone();
+            let user_service = user_service.clone();
+            let directory_service = directory_service.clone();
 
-        let user = AcmeUser::get_user(self.user_id.as_str(), &connection)
-            .map_err(|e| anyhow::anyhow!("Failed to look up user: {}", e))?
-            .ok_or_else(|| anyhow::anyhow!(
-                "Could not complete login job since queried user could not be found!"
-            ))?;
+            let user_id = config.get_user_id();
+            let user = user_service.get_user(&user_id)
+                .await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
+                .ok_or_else(|| JobEngineError::JobExecutionError("No user found matching configured user_id".into()))?;
 
-        let dir = AcmeDirectory::get_existing(user.id, &connection)?
-            .ok_or_else(|| anyhow::anyhow!("No ACME directory found for user '{}'", self.user_id))?;
+            let directory = directory_service.fetch().await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
 
-        // TODO: export to separate function and use where key needs to be fetched, for posteriors sake
-        let private_key = load_private_key(&user.user_id, &user.key_path, &user.key_type)?;
+            let _ = user_service.login(&user, &directory).await;
 
-        let account_url = AcmeAccountClient::login_or_register(
-            &private_key,
-            &dir.new_nonce,
-            &dir.new_account,
-            true, // TODO: configure via application config
-        )
-        .await?;
-
-        AcmeAccountLink::upsert_for_user_id(self.user_id.as_str(), &account_url, &connection)
-            .map_err(|e| anyhow::anyhow!("Failed to persist account link: {}", e))?;
-
-        info!("Account link persisted for user '{}'.", self.user_id);
-        Ok(())
+            return Ok(JobExecutionFlag::PreflightCompleted)
+        }
+        Ok(JobExecutionFlag::Fatal(ACMES133))
     }
 }

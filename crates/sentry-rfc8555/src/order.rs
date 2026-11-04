@@ -1,8 +1,10 @@
+use std::io::Read;
 use serde_json::{json, Value};
 use tracing::{debug, info};
 use sentry_jose::keys::PrivateKey;
+use crate::challenge::ChallengeOperations;
 use crate::client::build_client;
-use crate::default::DefaultOperations;
+use crate::default::{ConvertOperation, DefaultOperations};
 use crate::error::{DefaultOperationsError, OrderOperationsError};
 use crate::idempotency::fetch_nonce;
 use crate::jws::try_validate_jws_response;
@@ -113,5 +115,15 @@ impl OrderOperations {
             authorization_url,
             finalize_url,
         })
+    }
+}
+
+impl ConvertOperation<ChallengeOperations> for OrderOperations {
+    fn convert(self) -> ChallengeOperations {
+        ChallengeOperations::__new(
+            self.private_key,
+            self.account_url,
+            self.client
+        )
     }
 }

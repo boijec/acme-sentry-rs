@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 sentry-jose.workspace = true
 sentry-crypto.workspace = true
+sentry-common.workspace = true
 
 tracing.workspace = true
 reqwest.workspace = true

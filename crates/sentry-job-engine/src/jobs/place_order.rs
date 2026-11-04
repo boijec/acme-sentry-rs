@@ -1,43 +1,33 @@
 use crate::dependencies::JobDependencies;
 use crate::error::JobEngineError;
-use crate::job::Job;
+use crate::job::JobErrorCode::ACMES133;
+use crate::job::{Job, JobExecutionFlag};
 use crate::scheduling::SchedulerHandle;
 use async_trait::async_trait;
-use tracing::info;
+use sentry_core::config::{ApplicationConfig, ConfigurationMap};
+use sentry_core::directory::service::DirectoryService;
+use sentry_core::order::service::OrderService;
+use sentry_core::user::service::UserService;
+use std::sync::Arc;
 
+#[derive(Default)]
 pub struct PlaceOrderJob {
-    pub user_id: String,
-    pub domain: String,
+    config: Option<Arc<ApplicationConfig>>,
+    user_service: Option<Arc<UserService>>,
+    directory_service: Option<Arc<DirectoryService>>,
+    order_service: Option<Arc<OrderService>>,
+
+    domain: String,
+    // company_name: String,
+    // business_unit: String
+    // ...etc
 }
 
 impl PlaceOrderJob {
-    pub fn new(user_id: String, domain: String) -> Self {
-        PlaceOrderJob { user_id, domain }
-    }
-    pub fn builder() -> PlaceOrderJobBuilder {
-        PlaceOrderJobBuilder::default()
-    }
-}
-
-#[derive(Default)]
-pub struct PlaceOrderJobBuilder {
-    user_id: String,
-    domain: String,
-}
-
-impl PlaceOrderJobBuilder {
-    pub fn user_id(mut self, user_id: &str) -> Self {
-        self.user_id = user_id.to_string();
-        self
-    }
-    pub fn domain(mut self, domain: &str) -> Self {
-        self.domain = domain.to_string();
-        self
-    }
-    pub fn build(self) -> PlaceOrderJob {
+    pub fn instantiate(domain: String) -> PlaceOrderJob {
         PlaceOrderJob {
-            user_id: self.user_id,
-            domain: self.domain,
+            domain,
+            ..Default::default()
         }
     }
 }
@@ -48,61 +38,47 @@ impl<'a> Job<'a> for PlaceOrderJob {
         "place-order-job"
     }
 
-    fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
-        return;
+    fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
+        self.config = Some(dependencies.configuration());
+        self.user_service = Some(dependencies.services().user_service());
+        self.directory_service = Some(dependencies.services().directory_service());
+        self.order_service = Some(dependencies.services().order_service());
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
-        let conn = DatabaseConnection::get_connection()
-            .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<JobExecutionFlag, JobEngineError> {
+        let services = (&self.user_service, &self.config, &self.directory_service, &self.order_service);
+        if let (
+            Some(user_service),
+            Some(config),
+            Some(directory_service),
+            Some(order_service)
+        ) = services {
+            let config = config.clone();
+            let user_service = user_service.clone();
+            let directory_service = directory_service.clone();
+            let order_service = order_service.clone();
 
-        let user = AcmeUser::get_user(self.user_id.as_str(), &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to look up user: {}", e))?
-            .ok_or_else(|| anyhow::anyhow!("User '{}' not found", self.user_id))?;
+            let user_id = config.get_user_id();
+            let user = user_service.get_user(&user_id)
+                .await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
+                .ok_or_else(|| JobEngineError::JobExecutionError("No user found matching configured user_id".into()))?;
 
-        let account_link = AcmeAccountLink::get_for_user(user.id, &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to load account link: {}", e))?
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "No account link found for user '{}' — has login_user_job run?",
-                    self.user_id
-                )
-            })?;
+            let directory = directory_service.fetch().await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+            let domain = self.domain.clone();
 
-        let dir = AcmeDirectory::get_existing(user.id, &conn)?
-            .ok_or_else(|| anyhow::anyhow!("No ACME directory for user '{}'", self.user_id))?;
+            let order = order_service.place_order_for_domain(domain, &user, &directory).await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
 
-        let private_key = load_private_key(&user.user_id, &user.key_path, &user.key_type)?;
+            // handle
+            //     .submit(AcceptDnsChallengeJob::new(order.id, self.user_id.clone()))
+            //     .await
+            //     .map_err(|_| anyhow::anyhow!("Failed to submit AcceptDnsChallengeJob"))?;
 
-        let acme = AcmeAccountClient::new(private_key, account_link.account_url, true)
-            .map_err(|e| anyhow::anyhow!("Failed to create ACME client: {}", e))?;
-
-        let result = acme
-            .place_order(&dir.new_nonce, &dir.new_order, &self.domain)
-            .await?;
-
-        let order = AcmeOrder::create(user.id, self.domain.as_str(), &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to create order record: {}", e))?;
-
-        AcmeOrder::update_order_urls(
-            order.id,
-            &result.order_url,
-            &result.authorization_url,
-            &result.finalize_url,
-            &conn,
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to update order URLs: {}", e))?;
-
-        info!(
-            "Order record saved (id={}) for domain '{}', submitting AcceptDnsChallengeJob.",
-            order.id, self.domain
-        );
-        handle
-            .submit(AcceptDnsChallengeJob::new(order.id, self.user_id.clone()))
-            .await
-            .map_err(|_| anyhow::anyhow!("Failed to submit AcceptDnsChallengeJob"))?;
-
-        Ok(())
+            return Ok(JobExecutionFlag::Stop)
+        }
+        return Ok(JobExecutionFlag::Fatal(ACMES133));
     }
 }
 

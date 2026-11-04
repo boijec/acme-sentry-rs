@@ -5,7 +5,7 @@ use sqlx::{Pool, Sqlite};
 
 #[derive(Serialize, sqlx::FromRow)]
 pub struct User {
-    id: u32,
+    id: i64,
     user_id: String,
     key_type: String,
     key_path: String,
@@ -15,7 +15,7 @@ pub struct User {
 
 #[derive(Default)]
 pub struct UserBuilder {
-    id: u32,
+    id: i64,
     user_id: String,
     key_type: String,
     key_path: String,
@@ -27,7 +27,7 @@ impl User {
     pub fn builder() -> UserBuilder {
         UserBuilder::default()
     }
-    pub fn id(&self) -> u32 {
+    pub fn id(&self) -> i64 {
         self.id
     }
     pub fn user_id(&self) -> &str {
@@ -48,7 +48,7 @@ impl User {
 }
 
 impl UserBuilder {
-    pub fn id(mut self, id: u32) -> Self {
+    pub fn id(mut self, id: i64) -> Self {
         self.id = id;
         self
     }

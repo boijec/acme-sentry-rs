@@ -11,9 +11,11 @@ sentry-io.workspace = true
 sentry-crypto.workspace = true
 sentry-jose.workspace = true
 sentry-db.workspace = true
+sentry-rfc8555.workspace = true
 
 async-trait.workspace = true
 tracing.workspace = true
+tokio.workspace = true
 thiserror.workspace = true
 reqwest.workspace = true
 anyhow.workspace = true

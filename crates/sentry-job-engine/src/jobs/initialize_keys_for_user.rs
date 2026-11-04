@@ -1,32 +1,22 @@
 use crate::dependencies::JobDependencies;
 use crate::error::JobEngineError;
-use crate::job::Job;
+use crate::job::{Job, JobExecutionFlag};
 use crate::scheduling::SchedulerHandle;
 use async_trait::async_trait;
 use sentry_core::config::{ApplicationConfig, ConfigurationMap};
 use sentry_core::user::service::UserService;
 use std::sync::Arc;
+use crate::job::JobErrorCode::ACMES133;
 
+#[derive(Default)]
 pub struct LoadLocalUserJob {
     config: Option<Arc<ApplicationConfig>>,
     user_service: Option<Arc<UserService>>,
 }
 
-#[derive(Default)]
-pub struct LoadLocalUserJobBuilder {}
-
-impl LoadLocalUserJobBuilder {
-    pub fn build(self) -> LoadLocalUserJob {
-        LoadLocalUserJob {
-            config: None,
-            user_service: None,
-        }
-    }
-}
-
 impl LoadLocalUserJob {
-    pub fn builder() -> LoadLocalUserJobBuilder {
-        LoadLocalUserJobBuilder::default()
+    pub fn instantiate() -> LoadLocalUserJob {
+        LoadLocalUserJob::default()
     }
 }
 
@@ -41,8 +31,12 @@ impl<'a> Job<'a> for LoadLocalUserJob {
         let usr_service = dependencies.services().user_service();
         self.user_service = Some(usr_service);
     }
-    async fn execute(&self, _: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
-        if let (Some(user_service), Some(config)) = (&self.user_service, &self.config) {
+    async fn execute(&self, _: SchedulerHandle<'a>) -> Result<JobExecutionFlag, JobEngineError> {
+        let services = (&self.user_service, &self.config);
+        if let (
+            Some(user_service),
+            Some(config)
+        ) = services {
             let config = config.clone();
             let user_service = user_service.clone();
 
@@ -52,10 +46,8 @@ impl<'a> Job<'a> for LoadLocalUserJob {
             let _ = user_service.user_sanity_check(&user).await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
 
-            return Ok(());
+            return Ok(JobExecutionFlag::PreflightNext);
         }
-        Err(JobEngineError::JobExecutionError(String::from(
-            "No dependencies were provided",
-        )))
+        Ok(JobExecutionFlag::Fatal(ACMES133))
     }
 }

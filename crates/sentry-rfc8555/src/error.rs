@@ -1,3 +1,4 @@
+use std::string::ParseError;
 use thiserror::Error;
 use sentry_jose::error::KeyError;
 
@@ -133,4 +134,17 @@ pub enum CertificateOperationsError {
 #[allow(unused)]
 #[derive(Error, Debug)]
 pub enum DirectoryOperationsError {
+    #[error("Error building http client in acme certificate operations: {0}")]
+    RequestClientError(#[from] HttpClientError),
+    #[error("Error during a default operation: {0}")]
+    DefaultMethodError(#[from] DefaultOperationsError),
+
+    #[error("error parsing url: {1} - {0}")]
+    UrlParsingError(String, String),
+    #[error("error calling directory path: {0}")]
+    DirectoryCallError(String),
+    #[error("error parsing directory response: {0}")]
+    DirectoryResponseParseError(reqwest::Error),
+    #[error("missing {0} endpoint in response")]
+    MissingResourceError(String),
 }

@@ -1320,9 +1320,9 @@ dependencies = [
 
 [[package]]
 name = "idna"
-version = "1.0.3"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "686f825264d630750a544639377bae737628043f20d38bbc029e8f29ea968a7e"
+checksum = "3b0875f23caa03898994f6ddc501886a45c7d3d62d04d2d90788d47be1b1e4de"
 dependencies = [
  "idna_adapter",
  "smallvec",
@@ -1675,9 +1675,9 @@ dependencies = [
 
 [[package]]
 name = "percent-encoding"
-version = "2.3.1"
+version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
+checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pin-project-lite"
@@ -2120,7 +2120,9 @@ dependencies = [
  "sentry-db",
  "sentry-io",
  "sentry-jose",
+ "sentry-rfc8555",
  "thiserror",
+ "tokio",
  "tracing",
 ]
 
@@ -2161,16 +2163,7 @@ name = "sentry-job-engine"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "reqwest",
- "sentry-common",
  "sentry-core",
- "sentry-crypto",
- "sentry-db",
- "sentry-io",
- "sentry-jose",
- "sentry-plugin-engine",
- "sentry-rfc8555",
- "serde_json",
  "thiserror",
  "tokio",
  "tracing",
@@ -2202,6 +2195,7 @@ name = "sentry-rfc8555"
 version = "0.1.0"
 dependencies = [
  "reqwest",
+ "sentry-common",
  "sentry-crypto",
  "sentry-jose",
  "serde",
@@ -2985,13 +2979,14 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "url"
-version = "2.5.4"
+version = "2.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32f8b686cadd1473f4bd0117a5d28d36b1ade384ea9b5069a1c40aefed7fda60"
+checksum = "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed"
 dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

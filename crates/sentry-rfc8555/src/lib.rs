@@ -1,10 +1,10 @@
 pub mod account;
 pub mod error;
 pub mod idempotency;
-mod jws;
-mod default;
-mod directory;
-mod challenge;
-mod order;
-mod certificate;
-mod client;
+pub mod jws;
+pub mod default;
+pub mod directory;
+pub mod challenge;
+pub mod order;
+pub mod certificate;
+pub mod client;

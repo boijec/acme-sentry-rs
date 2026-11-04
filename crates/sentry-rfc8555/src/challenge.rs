@@ -59,6 +59,17 @@ impl ChallengeOperations {
             account_url,
         })
     }
+    pub fn __new(
+        private_key: PrivateKey,
+        account_url: String,
+        client: reqwest::Client,
+    ) -> ChallengeOperations {
+        ChallengeOperations {
+            private_key,
+            account_url,
+            client,
+        }
+    }
 
     pub async fn fetch_dns01_challenge(
         &self,

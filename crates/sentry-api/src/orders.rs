@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use actix_web::{HttpResponse, Responder, web};
 use sentry_core::config::{ApplicationConfig, ConfigurationMap};
-//use sentry_job_engine::jobs::place_order::PlaceOrderJob;
+use sentry_job_engine::jobs::place_order::PlaceOrderJob;
 use sentry_job_engine::scheduling::SchedulerHandle;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::sync::Arc;
 use tracing::info;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -14,27 +14,23 @@ pub struct NewOrderRequest {
 
 pub async fn post_new_order<'a>(
     req: web::Json<NewOrderRequest>,
-    _handle: web::Data<SchedulerHandle<'a>>,
+    handle: web::Data<SchedulerHandle<'a>>,
     application_config: web::Data<Arc<ApplicationConfig>>,
 ) -> impl Responder {
     info!("Received new order request: domain='{}'", req.domain);
     let config = application_config.clone();
     let _user_id = config.get_user_id();
-    // match handle
-    //     .submit(PlaceOrderJob::new(user_id, req.domain.clone()))
-    //     .await
-    // {
-    //     Ok(_) => HttpResponse::Accepted().json(json!({
-    //         "status": "accepted",
-    //         "message": format!("Order for domain '{}' has been queued.", req.domain)
-    //     })),
-    //     Err(err) => HttpResponse::ServiceUnavailable().json(json!({
-    //         "status": "error",
-    //         "message": format!("Failed to queue order: {}", err)
-    //     })),
-    // }
-    HttpResponse::Accepted().json(json!({
-        "status": "accepted",
-        "message": format!("Order for domain '{}' has been queued.", req.domain)
-    }))
+    match handle
+        .submit(PlaceOrderJob::instantiate(req.domain.clone()))
+        .await
+    {
+        Ok(_) => HttpResponse::Accepted().json(json!({
+            "status": "accepted",
+            "message": format!("Order for domain '{}' has been queued.", req.domain)
+        })),
+        Err(err) => HttpResponse::ServiceUnavailable().json(json!({
+            "status": "error",
+            "message": format!("Failed to queue order: {}", err)
+        })),
+    }
 }

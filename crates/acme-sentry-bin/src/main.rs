@@ -11,7 +11,7 @@ use sentry_job_engine::jobs::preflight_start_sequence;
 use sentry_job_engine::scheduling::Scheduler;
 use std::sync::Arc;
 use anyhow::anyhow;
-use tracing::{Instrument, Span, info, info_span};
+use tracing::{error, info, info_span, Instrument, Span};
 
 mod config_parsing;
 
@@ -35,7 +35,8 @@ fn main() {
     if args.version {
         return;
     }
-    let conf = build_application_config(args.clone()).unwrap();
+    let conf = build_application_config(args.clone())
+        .unwrap();
     tracing_subscriber::fmt()
         .with_max_level(conf.logging_level.unwrap())
         .init();
@@ -69,6 +70,16 @@ async fn async_main(application_config: ApplicationConfig) -> anyhow::Result<()>
     let _ = tokio::spawn(scheduler.run(handle.clone()).instrument(scheduler_span));
 
     let _ = preflight_start_sequence(&handle).await?;
+    let mut preflight_handler = handle.clone();
+    let pre_flight_result = preflight_handler.wait_for_healthy().await;
+    if let Ok(_) = pre_flight_result {
+        info!("Preflight steps ran successfully");
+    } else if let Err(error) = pre_flight_result {
+        error!("Preflight steps raised error :: {}", error.to_string());
+        handle.shutdown().await;
+        preflight_handler.wait_for_shutdown().await;
+        return Ok(())
+    }
 
     if application_config.application_mode {
         info!("Application mode has been enabled, monitoring input signals.");
@@ -77,18 +88,9 @@ async fn async_main(application_config: ApplicationConfig) -> anyhow::Result<()>
             .map_err(|err| anyhow!(err))?;
         Ok(())
     } else {
-        info!("Single shot mode enabled triggering shutdown and waiting for queue to drain!");
-        // TODO: something like this instead?
-        /*
-        let result = handle.wait_for_completion().await;
-        match result {
-            Ok(()) => {
-                info!("Completion result reached, shutting down...");
-            },
-            Err(e) => error!("Execution error: {}", e.to_string()),
-        }
-        */
-        handle.shutdown().await;
+        info!("Single shot mode enabled waiting for engine 'done' flag");
+        let mut shutdown_handle = handle.clone();
+        shutdown_handle.wait_for_completion().await;
         Ok(())
     }
 }

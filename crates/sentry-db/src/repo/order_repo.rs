@@ -17,6 +17,36 @@ pub struct Order {
     created_at: String,
 }
 
+impl Order {
+    pub fn id(&self) -> i64 {
+        self.id
+    }
+    pub fn user_id(&self) -> i64 {
+        self.user_id
+    }
+    pub fn domain(&self) -> &str {
+        &self.domain
+    }
+    pub fn order_url(&self) -> Option<&str> {
+        self.order_url.as_deref()
+    }
+    pub fn authorization_url(&self) -> Option<&str> {
+        self.authorization_url.as_deref()
+    }
+    pub fn finalize_url(&self) -> Option<&str> {
+        self.finalize_url.as_deref()
+    }
+    pub fn certificate_url(&self) -> Option<&str> {
+        self.certificate_url.as_deref()
+    }
+    pub fn status(&self) -> &str {
+        &self.status
+    }
+    pub fn created_at(&self) -> &str {
+        &self.created_at
+    }
+}
+
 #[async_trait]
 pub trait OrderRepo {
     async fn create_order(&self, user_id: i64, domain: String) -> Result<Order, DatabaseError>;
@@ -27,7 +57,7 @@ pub trait OrderRepo {
         order_id: i64,
         order_url: String,
         authorization_url: String,
-        finalize_url: Option<String>,
+        finalize_url: String,
     ) -> Result<Order, DatabaseError>;
     async fn set_certificate_url(&self, order_id: i64, certificate_url: String) -> Result<Order, DatabaseError>;
     async fn set_status(&self, order_id: i64, status: String) -> Result<Order, DatabaseError>;
@@ -68,10 +98,10 @@ impl OrderRepo for OrderRepository {
                  "#
         )
             .bind(order_id)
-            .fetch_one(&self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
-        Ok(Some(order))
+        Ok(order)
     }
 
     async fn get_pending_for_user(&self, user_id: i64) -> Result<Option<Order>, DatabaseError> {
@@ -83,17 +113,17 @@ impl OrderRepo for OrderRepository {
                  "#
         )
             .bind(user_id)
-            .fetch_one(&self.pool)
+            .fetch_optional(&self.pool)
             .await
             .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
-        Ok(Some(order))
+        Ok(order)
     }
 
     async fn update_order_urls(&self,
                                order_id: i64,
                                order_url: String,
                                authorization_url: String,
-                               finalize_url: Option<String>
+                               finalize_url: String
     ) -> Result<Order, DatabaseError> {
         let order = sqlx::query_as::<_, Order>(
             r#"
