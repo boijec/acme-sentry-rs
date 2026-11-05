@@ -92,5 +92,5 @@ pub enum KeyError {
     EcGroupError(ErrorStack, c_int),
     // TODO: remove generic error
     #[error("Generic key error: {0}")]
-    GenericKeyError(String)
+    GenericKeyError(String),
 }

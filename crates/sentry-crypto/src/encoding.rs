@@ -8,8 +8,7 @@ pub fn encode_b64(input: &[u8]) -> String {
 
 /// Decode a base64 string to a byte vector.
 pub fn decode_b64<T: AsRef<[u8]> + ?Sized>(input: &T) -> Result<Vec<u8>, EncodingError> {
-    URL_SAFE_NO_PAD.decode(input)
-        .map_err(EncodingError::from)
+    URL_SAFE_NO_PAD.decode(input).map_err(EncodingError::from)
 }
 
 pub fn remove_last(value: &str) -> &str {

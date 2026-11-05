@@ -126,9 +126,7 @@ impl ChallengeOperations {
         // TXT record value: base64url(sha256(key_authorization))
         let txt_record_value = sha256_b64(key_authorization.as_bytes());
 
-        let domain = body["identifier"]["value"]
-            .as_str()
-            .unwrap_or("unknown");
+        let domain = body["identifier"]["value"].as_str().unwrap_or("unknown");
         let dns_record_name = format!("_acme-challenge.{}.", domain);
 
         Ok(Dns01ChallengeInfo {
@@ -161,10 +159,7 @@ impl ChallengeOperations {
             .await
             .map_err(|e| ChallengeOperationsError::ChallengeNotificationError(e))?;
 
-        let body: Value = resp
-            .json()
-            .await
-            .unwrap_or(Value::Null);
+        let body: Value = resp.json().await.unwrap_or(Value::Null);
 
         try_validate_jws_response(&body);
         debug!("Challenge notify response: {}", body);
@@ -187,7 +182,10 @@ impl ChallengeOperations {
         let payload = json!({ "csr": csr_b64 });
         let jws_body = self.build_jws_body_kid(protected, &payload)?;
 
-        info!("Sending finalize request to {} for domain '{}'", finalize_url, domain);
+        info!(
+            "Sending finalize request to {} for domain '{}'",
+            finalize_url, domain
+        );
         let resp = self
             .client
             .post(finalize_url)

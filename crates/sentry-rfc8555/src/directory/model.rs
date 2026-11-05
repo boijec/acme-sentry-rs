@@ -20,7 +20,11 @@ pub struct AcmeDirectoryApi {
 impl CompareFields<AcmeDirectoryApi> for AcmeDirectoryApi {
     fn compare_fields(&self, other: &AcmeDirectoryApi) -> Vec<FieldDiff> {
         let auths = self.new_authz.clone().unwrap_or("".to_string()).to_string();
-        let other_auths = other.new_authz.clone().unwrap_or("".to_string()).to_string();
+        let other_auths = other
+            .new_authz
+            .clone()
+            .unwrap_or("".to_string())
+            .to_string();
         vec![
             FieldDiff {
                 field: "key_change",

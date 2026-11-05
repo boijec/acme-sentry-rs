@@ -2,10 +2,7 @@ use crate::client::build_client;
 use crate::default::DefaultOperations;
 use crate::error::{AcmeAccountError, DefaultOperationsError};
 use crate::idempotency::fetch_nonce;
-use crate::jws::{
-    build_jws_body_jwk,
-    try_validate_jws_response,
-};
+use crate::jws::{build_jws_body_jwk, try_validate_jws_response};
 use sentry_jose::jwk::GenericJwk;
 use sentry_jose::keys::PrivateKey;
 use serde::{Deserialize, Serialize};
@@ -80,10 +77,7 @@ impl AccountOperations {
                 debug!("Account information retrieved");
             }
             _ => {
-                return Err(DefaultOperationsError::UnexpectedStatus(
-                    status,
-                    body
-                ).into());
+                return Err(DefaultOperationsError::UnexpectedStatus(status, body).into());
             }
         }
         let acc = serde_json::from_value(body)
@@ -153,10 +147,7 @@ pub async fn login_or_register(
             );
         }
         _ => {
-            return Err(DefaultOperationsError::UnexpectedStatus(
-                status,
-                body
-            ).into());
+            return Err(DefaultOperationsError::UnexpectedStatus(status, body).into());
         }
     }
 

@@ -52,7 +52,7 @@ pub fn run_plugin(
     str_path: String,
     discovery_type: DiscoveryType,
     run_mode: RunMode,
-    set_config: &SetConfig
+    set_config: &SetConfig,
 ) -> Result<(), PluginEngineError> {
     match discovery_type {
         DiscoveryType::Directory => {
@@ -63,7 +63,12 @@ pub fn run_plugin(
             };
 
             for entry in entries.flatten() {
-                load(&entry.path(), UnloadPolicy::Unload, run_mode.clone(), set_config)
+                load(
+                    &entry.path(),
+                    UnloadPolicy::Unload,
+                    run_mode.clone(),
+                    set_config,
+                )
             }
             Ok(())
         }
@@ -87,7 +92,10 @@ fn load(path: &Path, policy: UnloadPolicy, run_mode: RunMode, run_config: &SetCo
     let config = HostValue::map(vec![
         ("domain", HostValue::str(run_config.domain.as_str())),
         ("acme_token", HostValue::str(run_config.acme_token.as_str())),
-        ("record_name", HostValue::str(run_config.record_name.as_str())),
+        (
+            "record_name",
+            HostValue::str(run_config.record_name.as_str()),
+        ),
     ]);
     let (rx, _cancel_flag, worker) = run_in_sub_task(plugin, config, run_mode);
     for event in rx {

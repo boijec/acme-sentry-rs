@@ -11,10 +11,9 @@ use sentry_jose::keys::PrivateKey;
 use sentry_plugin_engine::loader::{SetConfig, run_plugin};
 use sentry_plugin_engine::run_mode::{DiscoveryType, RunMode};
 use sentry_rfc8555::certificate::CertificateOperations;
-use sentry_rfc8555::challenge::ChallengeOperations;
 use sentry_rfc8555::order::OrderOperations;
 use std::sync::Arc;
-use tracing::{info, instrument, warn};
+use tracing::{info, instrument};
 
 pub struct OrderService {
     configuration: Arc<ApplicationConfig>,
@@ -275,7 +274,8 @@ impl OrderService {
             .await
             .map_err(|e| OrderServiceError::InternalError(e.to_string()))?;
         if let Some(cert_url) = certificate_url {
-            let bytes = ops.download_certificate(&directory.new_nonce, &cert_url)
+            let bytes = ops
+                .download_certificate(&directory.new_nonce, &cert_url)
                 .await
                 .map_err(|e| OrderServiceError::InternalError(e.to_string()))?;
             Ok(DownloadStatus::Result(bytes))

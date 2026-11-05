@@ -25,7 +25,12 @@ pub trait FileSystemOperations {
     fn ensure_sub_dir(&self, name: &str) -> Result<PathBuf, FileSystemError>;
     fn file_exists_adaptive(&self, dir: PathBuf, file_name: &str) -> bool;
     fn file_exists(&self, dir: PathBuf, file_name: &str) -> bool;
-    fn write_to_file(&self, sub_dir: &str, filename: &str, data: &[u8]) -> Result<PathBuf, FileSystemError>;
+    fn write_to_file(
+        &self,
+        sub_dir: &str,
+        filename: &str,
+        data: &[u8],
+    ) -> Result<PathBuf, FileSystemError>;
     fn read_from_file(&self, sub_dir: &str, filename: &str) -> Result<Vec<u8>, FileSystemError>;
 }
 
@@ -33,8 +38,12 @@ impl BasicUnixFileSystem {
     pub fn new<P: AsRef<Path>>(base_dir: P) -> Result<Self, FileSystemError> {
         let base_dir = base_dir.as_ref();
         if !base_dir.exists() {
-            fs::create_dir_all(base_dir)
-                .map_err(|e| FileSystemError::UnableToInitialize(e, base_dir.as_os_str().to_string_lossy().to_string()))?;
+            fs::create_dir_all(base_dir).map_err(|e| {
+                FileSystemError::UnableToInitialize(
+                    e,
+                    base_dir.as_os_str().to_string_lossy().to_string(),
+                )
+            })?;
         }
         Ok(BasicUnixFileSystem {
             base_dir: base_dir.to_path_buf(),
@@ -43,13 +52,12 @@ impl BasicUnixFileSystem {
 }
 
 impl FileSystemOperations for BasicUnixFileSystem {
-
     fn sub_dir(&self, name: &str) -> PathBuf {
         self.base_dir.join(name)
     }
     fn ensure_sub_dir(&self, name: &str) -> Result<PathBuf, FileSystemError> {
         let target = self.sub_dir(name);
-        if !target.exists() { 
+        if !target.exists() {
             fs::create_dir_all(&target)
                 .map_err(|e| FileSystemError::UnableToEnsureSubDir(e, name.to_string()))?;
         }
@@ -62,7 +70,12 @@ impl FileSystemOperations for BasicUnixFileSystem {
         self.base_dir.join(dir).join(file_name).exists()
     }
     #[instrument(skip(self, sub_dir, filename, data))]
-    fn write_to_file(&self, sub_dir: &str, filename: &str, data: &[u8]) -> Result<PathBuf, FileSystemError> {
+    fn write_to_file(
+        &self,
+        sub_dir: &str,
+        filename: &str,
+        data: &[u8],
+    ) -> Result<PathBuf, FileSystemError> {
         let dir = self.sub_dir(sub_dir);
         let file_path = dir.join(filename);
         debug!("Writing file: {}", file_path.display());

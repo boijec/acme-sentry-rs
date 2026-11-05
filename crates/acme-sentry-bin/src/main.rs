@@ -8,7 +8,6 @@ use sentry_db::pool::connect;
 use sentry_db::repo::initialize_repos;
 use sentry_io::fs::BasicUnixFileSystem;
 use sentry_job_engine::dependencies::JobDependencies;
-use sentry_job_engine::jobs::place_order::PlaceOrderJob;
 use sentry_job_engine::jobs::preflight_start_sequence;
 use sentry_job_engine::scheduling::Scheduler;
 use std::process::exit;
@@ -42,8 +41,7 @@ fn main() {
     if args.version {
         return;
     }
-    let conf = build_application_config(args.clone())
-        .unwrap();
+    let conf = build_application_config(args.clone()).unwrap();
     tracing_subscriber::fmt()
         .with_max_level(conf.logging_level.unwrap())
         .init();
@@ -52,12 +50,10 @@ fn main() {
         .unwrap()
         .block_on(async_main(conf).instrument(span));
     match runtime {
-        Ok(state) => {
-            match state {
-                EndState::Success => exit(0),
-                EndState::Failure => exit(1),
-            }
-        }
+        Ok(state) => match state {
+            EndState::Success => exit(0),
+            EndState::Failure => exit(1),
+        },
         Err(e) => {
             error!("Error in async runtime :: {}", e);
             exit(1);
@@ -96,7 +92,7 @@ async fn async_main(application_config: ApplicationConfig) -> anyhow::Result<End
         error!("Preflight steps raised error :: {}", error.to_string());
         handle.shutdown().await;
         preflight_handler.wait_for_shutdown().await;
-        return Ok(EndState::Failure)
+        return Ok(EndState::Failure);
     }
 
     if application_config.application_mode {

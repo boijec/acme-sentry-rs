@@ -6,7 +6,7 @@ pub struct ServiceOrderChallenge {
     pub dns_record_name: String,
     pub txt_record_value: String,
     pub status: String,
-    pub challenge_ready_url: String
+    pub challenge_ready_url: String,
 }
 
 #[derive(Default)]
@@ -18,7 +18,7 @@ pub struct ServiceOrderChallengeBuilder {
     dns_record_name: String,
     txt_record_value: String,
     status: String,
-    challenge_ready_url: String
+    challenge_ready_url: String,
 }
 
 impl ServiceOrderChallenge {

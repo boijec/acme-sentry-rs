@@ -4,14 +4,11 @@ use std::sync::Arc;
 
 pub struct JobDependencies {
     configuration: Arc<ApplicationConfig>,
-    services: Arc<Services>
+    services: Arc<Services>,
 }
 
 impl JobDependencies {
-    pub fn new(
-        configuration: Arc<ApplicationConfig>,
-        services: Arc<Services>
-    ) -> Self {
+    pub fn new(configuration: Arc<ApplicationConfig>, services: Arc<Services>) -> Self {
         Self {
             configuration,
             services,

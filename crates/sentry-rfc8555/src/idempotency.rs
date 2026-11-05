@@ -1,7 +1,10 @@
 use crate::error::AcmeIdempotencyError;
 use tracing::debug;
 
-pub async fn fetch_nonce(nonce_url: &str, http: &reqwest::Client) -> Result<String, AcmeIdempotencyError> {
+pub async fn fetch_nonce(
+    nonce_url: &str,
+    http: &reqwest::Client,
+) -> Result<String, AcmeIdempotencyError> {
     debug!("Fetching nonce at: {}", nonce_url);
     let resp = http
         .head(nonce_url)

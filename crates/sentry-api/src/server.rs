@@ -10,7 +10,11 @@ use tracing::{Instrument, info, info_span};
 // Tricking the borrow-checker by putting SchedulerHandle as static (it might as well be) but when we've gotten this far
 // the handle is going to live as long as the application is alive.
 // It's never dropped until we call shutdown, and we exit out of main.
-pub async fn start_http_server(application_config: Arc<ApplicationConfig>, handle: SchedulerHandle<'static>, services: Arc<Services>) -> Result<(), ServerError> {
+pub async fn start_http_server(
+    application_config: Arc<ApplicationConfig>,
+    handle: SchedulerHandle<'static>,
+    services: Arc<Services>,
+) -> Result<(), ServerError> {
     // TODO: add to yaml config / args params
     let bind_addr = "0.0.0.0:8080";
     let scheduler_data = web::Data::new(handle.clone());
@@ -23,24 +27,29 @@ pub async fn start_http_server(application_config: Arc<ApplicationConfig>, handl
             .app_data(service_list.clone())
             .route("/orders", web::post().to(orders::post_new_order))
     })
-        .workers(2)
-        .bind(bind_addr)
-        .map_err(|e| ServerError::SentryApiError(format!("Failed to bind HTTP server to {}: {}", bind_addr, e)))?
-        .run();
+    .workers(2)
+    .bind(bind_addr)
+    .map_err(|e| {
+        ServerError::SentryApiError(format!(
+            "Failed to bind HTTP server to {}: {}",
+            bind_addr, e
+        ))
+    })?
+    .run();
     let server_handle = server.handle();
     let server_span = info_span!("webserver");
     let srv_task = tokio::spawn(server.instrument(server_span));
     info!("HTTP server listening on {}", bind_addr);
     let mut h = handle.clone();
     tokio::select! {
-            _ = tokio::signal::ctrl_c() => {
-                server_handle.stop(true).await;
-                h.shutdown().await;
-            }
-            _ = h.wait_for_shutdown() => {
-                server_handle.stop(true).await;
-            }
+        _ = tokio::signal::ctrl_c() => {
+            server_handle.stop(true).await;
+            h.shutdown().await;
         }
+        _ = h.wait_for_shutdown() => {
+            server_handle.stop(true).await;
+        }
+    }
     let _ = srv_task.await;
     Ok(())
 }

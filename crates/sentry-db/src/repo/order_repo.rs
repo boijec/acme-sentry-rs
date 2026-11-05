@@ -59,7 +59,11 @@ pub trait OrderRepo {
         authorization_url: String,
         finalize_url: String,
     ) -> Result<Order, DatabaseError>;
-    async fn set_certificate_url(&self, order_id: i64, certificate_url: String) -> Result<Order, DatabaseError>;
+    async fn set_certificate_url(
+        &self,
+        order_id: i64,
+        certificate_url: String,
+    ) -> Result<Order, DatabaseError>;
     async fn set_status(&self, order_id: i64, status: String) -> Result<Order, DatabaseError>;
 }
 
@@ -80,14 +84,14 @@ impl OrderRepo for OrderRepository {
             r#"
                     INSERT INTO acme_orders (user_id, domain, status, created_at)
                     VALUES ($1, $2, 'pending', $3) RETURNING *;
-                 "#
+                 "#,
         )
-            .bind(user_id)
-            .bind(domain)
-            .bind(unix_now().as_str())
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
+        .bind(user_id)
+        .bind(domain)
+        .bind(unix_now().as_str())
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
         Ok(order)
     }
 
@@ -95,12 +99,12 @@ impl OrderRepo for OrderRepository {
         let order = sqlx::query_as::<_, Order>(
             r#"
                     SELECT * FROM acme_orders WHERE id = $1;
-                 "#
+                 "#,
         )
-            .bind(order_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
+        .bind(order_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
         Ok(order)
     }
 
@@ -110,51 +114,56 @@ impl OrderRepo for OrderRepository {
                     SELECT * FROM acme_orders
                     WHERE user_id = $1 AND status = 'pending'
                     ORDER BY id DESC LIMIT 1;
-                 "#
+                 "#,
         )
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
         Ok(order)
     }
 
-    async fn update_order_urls(&self,
-                               order_id: i64,
-                               order_url: String,
-                               authorization_url: String,
-                               finalize_url: String
+    async fn update_order_urls(
+        &self,
+        order_id: i64,
+        order_url: String,
+        authorization_url: String,
+        finalize_url: String,
     ) -> Result<Order, DatabaseError> {
         let order = sqlx::query_as::<_, Order>(
             r#"
                     UPDATE acme_orders
                     SET order_url = $1, authorization_url = $2, finalize_url = $3, status = 'ready'
                     WHERE id = $4 RETURNING *;
-                 "#
+                 "#,
         )
-            .bind(order_url)
-            .bind(authorization_url)
-            .bind(finalize_url)
-            .bind(order_id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
+        .bind(order_url)
+        .bind(authorization_url)
+        .bind(finalize_url)
+        .bind(order_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
         Ok(order)
     }
 
-    async fn set_certificate_url(&self, order_id: i64, certificate_url: String) -> Result<Order, DatabaseError> {
+    async fn set_certificate_url(
+        &self,
+        order_id: i64,
+        certificate_url: String,
+    ) -> Result<Order, DatabaseError> {
         let order = sqlx::query_as::<_, Order>(
             r#"
                     UPDATE acme_orders
                     SET certificate_url = $1, status = 'valid'
                     WHERE id = $2 RETURNING *;
-                 "#
+                 "#,
         )
-            .bind(certificate_url)
-            .bind(order_id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
+        .bind(certificate_url)
+        .bind(order_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
         Ok(order)
     }
 
@@ -162,13 +171,13 @@ impl OrderRepo for OrderRepository {
         let order = sqlx::query_as::<_, Order>(
             r#"
                     UPDATE acme_orders SET status = $1 WHERE id = $2 RETURNING *;
-                 "#
+                 "#,
         )
-            .bind(status)
-            .bind(order_id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
+        .bind(status)
+        .bind(order_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
         Ok(order)
     }
 }

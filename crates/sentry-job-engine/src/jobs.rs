@@ -12,11 +12,7 @@ pub mod login_user;
 pub mod place_order;
 
 pub async fn preflight_start_sequence(handle: &SchedulerHandle<'_>) -> Result<(), PreFlightError> {
-    handle
-        .submit(LoadLocalUserJob::instantiate())
-        .await?;
-    handle
-        .submit(LoginUserJob::instantiate())
-        .await?;
+    handle.submit(LoadLocalUserJob::instantiate()).await?;
+    handle.submit(LoginUserJob::instantiate()).await?;
     Ok(())
 }

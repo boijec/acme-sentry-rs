@@ -10,7 +10,7 @@ pub struct ServiceUserOrder {
     pub status: String,
     pub created_at: String,
 
-    pub challenge_info: Option<ServiceOrderChallenge>
+    pub challenge_info: Option<ServiceOrderChallenge>,
 }
 
 #[derive(Default)]
@@ -23,8 +23,8 @@ pub struct ServiceUserOrderBuilder {
     certificate_url: Option<String>,
     status: String,
     created_at: String,
-    
-    challenge_info: Option<ServiceOrderChallenge>
+
+    challenge_info: Option<ServiceOrderChallenge>,
 }
 
 pub enum DownloadStatus {
@@ -59,7 +59,10 @@ impl ServiceUserOrderBuilder {
         self.authorization_url = Some(authorization_url.to_owned());
         self
     }
-    pub fn authorization_url_option(mut self, authorization_url: impl ConvertInto<Option<String>>) -> Self {
+    pub fn authorization_url_option(
+        mut self,
+        authorization_url: impl ConvertInto<Option<String>>,
+    ) -> Self {
         self.authorization_url = authorization_url.cnv_into();
         self
     }
@@ -75,7 +78,10 @@ impl ServiceUserOrderBuilder {
         self.certificate_url = Some(certificate_url.to_owned());
         self
     }
-    pub fn certificate_url_option(mut self, certificate_url: impl ConvertInto<Option<String>>) -> Self {
+    pub fn certificate_url_option(
+        mut self,
+        certificate_url: impl ConvertInto<Option<String>>,
+    ) -> Self {
         self.certificate_url = certificate_url.cnv_into();
         self
     }
@@ -101,13 +107,13 @@ impl ServiceUserOrderBuilder {
             certificate_url: self.certificate_url,
             status: self.status,
             created_at: self.created_at,
-            
-            challenge_info: self.challenge_info
+
+            challenge_info: self.challenge_info,
         }
     }
 }
 
-trait ConvertInto<T> {
+pub trait ConvertInto<T> {
     fn cnv_into(self) -> T;
 }
 

@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tracing::info;
 
 pub struct ChallengeService {
+    #[allow(unused)]
     application_config: Arc<ApplicationConfig>,
     challenge_repo: Arc<dyn ChallengeRepo + Send + Sync>,
     directory_service: Arc<DirectoryService>,
@@ -153,7 +154,13 @@ impl ChallengeService {
             .map_err(|e| ChallengeServiceError::InternalError(e.to_string()))?;
         info!("Sending finalize request for domain.");
         tokio::time::sleep(tokio::time::Duration::from_secs(8)).await;
-        let t = challenge_ops.finalize(&directory.new_nonce, finalize_url, domain, certificate_private_key)
+        let t = challenge_ops
+            .finalize(
+                &directory.new_nonce,
+                finalize_url,
+                domain,
+                certificate_private_key,
+            )
             .await
             .map_err(|e| ChallengeServiceError::InternalError(e.to_string()))?;
         Ok(t)

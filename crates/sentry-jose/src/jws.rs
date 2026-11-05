@@ -81,11 +81,11 @@ impl Jws {
         Ok(format!("{}.{}", jws_data, encode_b64(signature.as_ref())))
     }
 
-    pub fn parse(
-        content: &String,
-    ) -> Result<Option<Jws>, JwsError> {
+    pub fn parse(content: &String) -> Result<Option<Jws>, JwsError> {
         if count_occurrences(content, '.') != 2 {
-            return Err(JwsError::JwsElementParseError("Error encountered when parsing JWS, JWS parts formatting is invalid".to_string()));
+            return Err(JwsError::JwsElementParseError(
+                "Error encountered when parsing JWS, JWS parts formatting is invalid".to_string(),
+            ));
         }
         let signature_cut = content.rfind('.').unwrap();
         let (header_and_payload, sign) = content.split_at(signature_cut);
@@ -104,25 +104,34 @@ impl Jws {
             }
         }?;
 
-        Self::verify(&header.alg, key, header_and_payload, decode_b64(remove_first(sign))?)?;
+        Self::verify(
+            &header.alg,
+            key,
+            header_and_payload,
+            decode_b64(remove_first(sign))?,
+        )?;
 
         let payload_bytes = decode_b64(remove_first(payload))?;
         let payload = serde_json::from_str(String::from_utf8(payload_bytes)?.as_str())?;
         Ok(Some(Jws { header, payload }))
     }
 
-    pub fn parse_flat(
-        value: &Value,
-    ) -> Result<Option<Jws>, JwsError> {
+    pub fn parse_flat(value: &Value) -> Result<Option<Jws>, JwsError> {
         let protected_b64 = value["protected"]
             .as_str()
-            .ok_or(JwsError::JwsElementParseError("Flat JWS missing 'protected' field".to_string()))?;
+            .ok_or(JwsError::JwsElementParseError(
+                "Flat JWS missing 'protected' field".to_string(),
+            ))?;
         let payload_b64 = value["payload"]
             .as_str()
-            .ok_or(JwsError::JwsElementParseError("Flat JWS missing 'payload' field".to_string()))?;
+            .ok_or(JwsError::JwsElementParseError(
+                "Flat JWS missing 'payload' field".to_string(),
+            ))?;
         let signature_b64 = value["signature"]
             .as_str()
-            .ok_or(JwsError::JwsElementParseError("Flat JWS missing 'signature' field".to_string()))?;
+            .ok_or(JwsError::JwsElementParseError(
+                "Flat JWS missing 'signature' field".to_string(),
+            ))?;
 
         let header_bytes = decode_b64(protected_b64)?;
         let header_string = String::from_utf8(header_bytes)?;
@@ -162,9 +171,7 @@ impl Jws {
                 Self::verify_with_rsa(&key, signed_input, &signature)?;
             }
 
-            SupportedAlgorithm::ES256
-            | SupportedAlgorithm::ES384
-            | SupportedAlgorithm::ES512 => {
+            SupportedAlgorithm::ES256 | SupportedAlgorithm::ES384 | SupportedAlgorithm::ES512 => {
                 Self::verify_with_ec(alg, &key, signed_input, &signature)?;
             }
 
@@ -175,18 +182,33 @@ impl Jws {
         Ok(())
     }
 
-    fn verify_with_rsa(key: &PKey<Public>, signed_input: &str, signature: &Vec<u8>) -> Result<(), JwsError> {
+    fn verify_with_rsa(
+        key: &PKey<Public>,
+        signed_input: &str,
+        signature: &Vec<u8>,
+    ) -> Result<(), JwsError> {
         let mut verifier = Verifier::new(MessageDigest::sha256(), &key)
             .map_err(|e| JwsError::JwsSignatureVerifierError(e, "RSA".to_string()))?;
-        verifier.update(signed_input.as_bytes())
+        verifier
+            .update(signed_input.as_bytes())
             .map_err(|e| JwsError::JwsSignatureUpdateError(e, "RSA".to_string()))?;
-        if !verifier.verify(&signature).map_err(|e| JwsError::JwsSignatureVerifierError(e, "RSA".to_owned()))? {
-            return Err(JwsError::JwsSignatureVerificationError("RSA (RS256)".to_string()));
+        if !verifier
+            .verify(&signature)
+            .map_err(|e| JwsError::JwsSignatureVerifierError(e, "RSA".to_owned()))?
+        {
+            return Err(JwsError::JwsSignatureVerificationError(
+                "RSA (RS256)".to_string(),
+            ));
         }
         Ok(())
     }
 
-    fn verify_with_ec(alg: &SupportedAlgorithm, key: &PKey<Public>, signed_input: &str, signature: &Vec<u8>) -> Result<(), JwsError> {
+    fn verify_with_ec(
+        alg: &SupportedAlgorithm,
+        key: &PKey<Public>,
+        signed_input: &str,
+        signature: &Vec<u8>,
+    ) -> Result<(), JwsError> {
         let coord_size: usize = match alg {
             SupportedAlgorithm::ES256 => 32,
             SupportedAlgorithm::ES384 => 48,
@@ -197,19 +219,29 @@ impl Jws {
         let digest = alg.get_hash().get_digest();
         let mut verifier = Verifier::new(digest, &key)
             .map_err(|e| JwsError::JwsSignatureVerifierError(e, "ECDSA".to_string()))?;
-        verifier.update(signed_input.as_bytes())
+        verifier
+            .update(signed_input.as_bytes())
             .map_err(|e| JwsError::JwsSignatureUpdateError(e, "ECDSA".to_string()))?;
-        if !verifier.verify(&der_sig).map_err(|e| JwsError::JwsSignatureVerifierError(e, "ECDSA".to_string()))? {
+        if !verifier
+            .verify(&der_sig)
+            .map_err(|e| JwsError::JwsSignatureVerifierError(e, "ECDSA".to_string()))?
+        {
             return Err(JwsError::JwsSignatureVerificationError("ECDSA".to_string()));
         }
         Ok(())
     }
 
-    fn verify_with_ed(key: &PKey<Public>, signed_input: &str, signature: &Vec<u8>) -> Result<(), JwsError> {
+    fn verify_with_ed(
+        key: &PKey<Public>,
+        signed_input: &str,
+        signature: &Vec<u8>,
+    ) -> Result<(), JwsError> {
         let mut verifier = Verifier::new_without_digest(&key)
             .map_err(|e| JwsError::JwsSignatureVerifierError(e, "EdDSA".to_string()))?;
-        if !verifier.verify_oneshot(&signature, signed_input.as_bytes())
-            .map_err(|e| JwsError::JwsSignatureVerifierError(e, "EdDSA".to_string()))? {
+        if !verifier
+            .verify_oneshot(&signature, signed_input.as_bytes())
+            .map_err(|e| JwsError::JwsSignatureVerifierError(e, "EdDSA".to_string()))?
+        {
             return Err(JwsError::JwsSignatureVerificationError("EdDSA".to_string()));
         }
         Ok(())
@@ -223,13 +255,14 @@ fn ecdsa_raw_to_der(raw: &[u8], coord_size: usize) -> Result<Vec<u8>, JwsError> 
         return Err(JwsError::RawEcdsaSignatureLengthError(
             coord_size * 2,
             coord_size,
-            raw.len()
+            raw.len(),
         ));
     }
     let r = big_num_from_slice(&raw[..coord_size])?;
     let s = big_num_from_slice(&raw[coord_size..])?;
     let sig = EcdsaSig::from_private_components(r, s)
         .map_err(|e| JwsError::PrivateKeyComponentsError(e))?;
-    Ok(sig.to_der()
+    Ok(sig
+        .to_der()
         .map_err(|e| JwsError::from(KeyError::UnableToCast(e, "Ecdsa".to_string())))?)
 }

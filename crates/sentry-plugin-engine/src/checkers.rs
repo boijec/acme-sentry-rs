@@ -22,6 +22,8 @@ pub fn check_plugins_directory(str_path: &str) -> Result<DiscoveryType, PluginEn
     } else if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("so") {
         Ok(DiscoveryType::SoloPlugin)
     } else {
-        Err(PluginEngineError::DiscoveryTypeError("Path is not a directory".to_string()))
+        Err(PluginEngineError::DiscoveryTypeError(
+            "Path is not a directory".to_string(),
+        ))
     }
 }

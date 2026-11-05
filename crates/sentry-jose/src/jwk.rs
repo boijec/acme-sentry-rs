@@ -32,8 +32,8 @@ impl GenericJwk {
         let e_coordinate_bytes = decode_b64(self.e.clone().unwrap().as_str())?;
         let n = big_num_from_vec(&n_coordinate_bytes)?;
         let e = big_num_from_vec(&e_coordinate_bytes)?;
-        let rsa = Rsa::from_public_components(n, e)
-            .map_err(|e| JwkError::PublicKeyComponentsError(e))?;
+        let rsa =
+            Rsa::from_public_components(n, e).map_err(|e| JwkError::PublicKeyComponentsError(e))?;
         Ok(PKey::from_rsa(rsa)
             .map_err(|e| JwkError::from(KeyError::UnableToCast(e, "RSA".to_string())))?)
     }
@@ -54,7 +54,10 @@ impl GenericJwk {
 ///
 /// If coordinate needs to have length 7 bytes, the resulting vector *has* to be:
 /// [0, 0, 215, 215, 215, 215, 215]
-pub fn fast_padded_coordinate_vector(key_coordinate: &BigNumRef, coordinate_size: usize) -> Vec<u8> {
+pub fn fast_padded_coordinate_vector(
+    key_coordinate: &BigNumRef,
+    coordinate_size: usize,
+) -> Vec<u8> {
     let coordinate_vector = key_coordinate.to_vec();
     if coordinate_vector.len() == coordinate_size {
         return coordinate_vector;

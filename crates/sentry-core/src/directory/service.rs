@@ -26,7 +26,9 @@ impl DirectoryService {
         }
         let dir_ops = DirectoryOperations::new_from_url(&self.configuration.base_url, true)
             .map_err(|e| DirectoryServiceError::InternalError(e.to_string()))?;
-        let dir = dir_ops.query_directory().await
+        let dir = dir_ops
+            .query_directory()
+            .await
             .map_err(|e| DirectoryServiceError::InternalError(e.to_string()))?;
         let user_dir = ServiceUserDirectory::builder()
             .revoke_cert(dir.revoke_cert.as_str())

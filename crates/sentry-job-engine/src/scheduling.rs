@@ -50,11 +50,11 @@ impl<'a> SchedulerHandle<'a> {
                     JobExecutionFlag::Fatal(code) => {
                         error!("SCHEDULER CRASH: {}", code.explain());
                         true
-                    },
+                    }
                     JobExecutionFlag::Stop => {
                         info!("Job engine reached final stage");
                         true
-                    },
+                    }
                     _ => false,
                 };
             })
@@ -63,8 +63,9 @@ impl<'a> SchedulerHandle<'a> {
         let rx = self.internal_shutdown().await;
         rx.await.expect("Scheduler didn't confirm shutdown");
     }
-    pub async fn wait_for_healthy(&mut self) -> Result<(), JobEngineError>{
-        let ref_flag = self.report_rx
+    pub async fn wait_for_healthy(&mut self) -> Result<(), JobEngineError> {
+        let ref_flag = self
+            .report_rx
             .wait_for(|status| {
                 return match status {
                     JobExecutionFlag::PreflightCompleted => true,
@@ -73,11 +74,15 @@ impl<'a> SchedulerHandle<'a> {
                 };
             })
             .await
-            .map_err(|_| JobEngineError::JobExecutionError("Error while waiting for preflight-confirmation".into()))?;
+            .map_err(|_| {
+                JobEngineError::JobExecutionError(
+                    "Error while waiting for preflight-confirmation".into(),
+                )
+            })?;
         let flag = ref_flag.deref();
         match flag {
             JobExecutionFlag::Fatal(e) => Err(JobEngineError::JobExecutionError(e.explain())),
-            _ => Ok(())
+            _ => Ok(()),
         }
     }
     pub async fn wait_for_shutdown(&mut self) {
@@ -156,6 +161,7 @@ impl<'a> Scheduler<'a> {
                     debug!("Shutdown hook triggered, closing queue");
                     self.receiver.close();
                     while let Ok(msg) = self.receiver.try_recv() {
+                        drop(msg);
                         debug!("Scheduler draining queue");
                     }
                     let _ = ack.send(());

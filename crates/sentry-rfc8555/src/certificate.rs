@@ -66,9 +66,7 @@ impl CertificateOperations {
             Some("valid") => {
                 let cert_url = body["certificate"]
                     .as_str()
-                    .ok_or_else(|| {
-                        CertificateOperationsError::OrderMissingCertificateUrl
-                    })?
+                    .ok_or_else(|| CertificateOperationsError::OrderMissingCertificateUrl)?
                     .to_owned();
                 info!("Order is valid. Certificate URL: {}", cert_url);
                 Ok(Some(cert_url))
@@ -78,7 +76,7 @@ impl CertificateOperations {
                 Ok(None)
             }
             Some(other) => Err(CertificateOperationsError::UnexpectedOrderStatusError(
-                other.to_string()
+                other.to_string(),
             )),
             None => Err(CertificateOperationsError::MissingOrderStatusField),
         }

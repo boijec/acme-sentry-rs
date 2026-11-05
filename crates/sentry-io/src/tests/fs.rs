@@ -20,7 +20,9 @@ fn test_write_to_file() {
     let sub = fs.ensure_sub_dir("data").unwrap();
     assert!(sub.exists());
 
-    let file_path = fs.write_to_file("data", "example.txt", b"Hello, world!").unwrap();
+    let file_path = fs
+        .write_to_file("data", "example.txt", b"Hello, world!")
+        .unwrap();
     assert!(file_path.exists());
     let content = read_to_string(file_path).unwrap();
     assert_eq!(content, "Hello, world!");

@@ -8,13 +8,9 @@ pub async fn connect(connection_path: &String) -> Result<Pool<Sqlite>, DatabaseE
         .connect(connection_path)
         .await
         .map_err(|e| DatabaseError::ConnectionError(e))?;
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
     Ok(pool)
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -28,5 +24,4 @@ mod tests {
         t.close().await;
         assert!(t.is_closed());
     }
-
 }

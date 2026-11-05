@@ -7,12 +7,12 @@ use crate::repo::user_repo::{UserRepo, UserRepository};
 use sqlx::{Pool, Sqlite};
 use std::sync::Arc;
 
-pub mod user_repo;
-pub mod directory_repo;
 pub mod account_link_repo;
 pub mod certificate_repo;
 pub mod challenge_repo;
+pub mod directory_repo;
 pub mod order_repo;
+pub mod user_repo;
 
 pub struct DatabaseRepositories {
     user_repo: Arc<dyn UserRepo + Send + Sync>,

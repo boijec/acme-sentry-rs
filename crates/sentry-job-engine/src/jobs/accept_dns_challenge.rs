@@ -39,34 +39,38 @@ impl<'a> Job<'a> for AcceptDnsChallengeJob {
         self.order_service = Some(dependencies.services().order_service());
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<JobExecutionFlag, JobEngineError> {
+    async fn execute(
+        &self,
+        handle: SchedulerHandle<'a>,
+    ) -> Result<JobExecutionFlag, JobEngineError> {
         let services = (&self.config, &self.user_service, &self.order_service);
-        if let (
-            Some(config),
-            Some(user_service),
-            Some(order_service),
-        ) = services {
+        if let (Some(config), Some(user_service), Some(order_service)) = services {
             let user_id = config.get_user_id();
-            let user = user_service.get_user(&user_id)
+            let user = user_service
+                .get_user(&user_id)
                 .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
-                .ok_or_else(|| JobEngineError::JobExecutionError("No user found matching configured user_id".into()))?;
+                .ok_or_else(|| {
+                    JobEngineError::JobExecutionError(
+                        "No user found matching configured user_id".into(),
+                    )
+                })?;
 
             let order_id = self.order_id;
-            let order = order_service.get_order(order_id, &user)
+            let order = order_service
+                .get_order(order_id, &user)
                 .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
 
-            let _ = order_service.prepare(&user, order)
+            let _ = order_service
+                .prepare(&user, order)
                 .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
 
-            handle.submit(DnsDigJob::initialize(order_id))
-                .await?;
+            handle.submit(DnsDigJob::initialize(order_id)).await?;
 
-            return Ok(JobExecutionFlag::Next)
+            return Ok(JobExecutionFlag::Next);
         }
         Err(JobEngineError::FlagError(ACMES133))
     }
 }
-

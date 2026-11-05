@@ -39,31 +39,38 @@ impl<'a> Job<'a> for GenerateCsrJob {
         self.order_service = Some(dependencies.services().order_service());
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<JobExecutionFlag, JobEngineError> {
-        let services = (&self.application_config, &self.user_service, &self.order_service);
-        if let (
-            Some(config),
-            Some(user_service),
-            Some(order_service),
-        ) = services {
+    async fn execute(
+        &self,
+        handle: SchedulerHandle<'a>,
+    ) -> Result<JobExecutionFlag, JobEngineError> {
+        let services = (
+            &self.application_config,
+            &self.user_service,
+            &self.order_service,
+        );
+        if let (Some(config), Some(user_service), Some(order_service)) = services {
             let user_id = config.get_user_id();
-            let user = user_service.get_user(&user_id)
+            let user = user_service
+                .get_user(&user_id)
                 .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
                 .ok_or_else(|| JobEngineError::JobExecutionError("User not found".into()))?;
-            let pkey = user_service.create_private_key_for_cert(&user)
+            let pkey = user_service
+                .create_private_key_for_cert(&user)
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
             let order_id = self.order_id.clone();
-            let order = order_service.get_order(order_id, &user)
+            let order = order_service
+                .get_order(order_id, &user)
                 .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
-            order_service.finalize(&order, &user, &pkey)
+            order_service
+                .finalize(&order, &user, &pkey)
                 .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
             handle
                 .submit(DownloadCertificateJob::initialize(order_id))
                 .await?;
-            return Ok(JobExecutionFlag::Next)
+            return Ok(JobExecutionFlag::Next);
         }
         Err(JobEngineError::FlagError(ACMES133))
     }

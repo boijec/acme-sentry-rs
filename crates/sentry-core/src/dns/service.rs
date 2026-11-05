@@ -1,29 +1,28 @@
 use crate::challenge::model::ServiceOrderChallenge;
 use crate::config::ApplicationConfig;
-use crate::directory::service::DirectoryService;
 use crate::dns::error::DnsServiceError;
 use sentry_crypto::crypto::sha256_b64;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tracing::info;
 
 pub struct DnsService {
+    #[allow(unused)]
     configuration: Arc<ApplicationConfig>,
 }
 
 impl DnsService {
     pub fn new(configuration: Arc<ApplicationConfig>) -> Self {
-        DnsService {
-            configuration,
-        }
+        DnsService { configuration }
     }
 
-    pub async fn compute_and_dig(&self, challenge: &ServiceOrderChallenge) -> Result<bool, DnsServiceError> {
+    pub async fn compute_and_dig(
+        &self,
+        challenge: &ServiceOrderChallenge,
+    ) -> Result<bool, DnsServiceError> {
         let expected = sha256_b64(challenge.key_authorization.as_bytes());
         info!(
             "Attempting dns dig for '{}' expecting TXT='{}'",
-            challenge.dns_record_name,
-            expected
+            challenge.dns_record_name, expected
         );
         let records = Self::dig_txt(&challenge.dns_record_name).await?;
         let propagated = records.iter().any(|r| r == &expected);
@@ -40,9 +39,11 @@ impl DnsService {
                     .output()
             }
         })
-            .await
-            .map_err(|e| DnsServiceError::DigPanic(e))?
-            .map_err(|e| DnsServiceError::InternalError(format!("Failed to execute dig - {}", e.to_string())))?;
+        .await
+        .map_err(|e| DnsServiceError::DigPanic(e))?
+        .map_err(|e| {
+            DnsServiceError::InternalError(format!("Failed to execute dig - {}", e.to_string()))
+        })?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let values: Vec<String> = stdout

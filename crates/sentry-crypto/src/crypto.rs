@@ -13,7 +13,7 @@ pub enum SupportedKey {
     EcP256,
     EcP384,
     EcP521,
-    Ed25519
+    Ed25519,
 }
 
 impl Display for SupportedKey {
@@ -29,7 +29,7 @@ impl SupportedKey {
             SupportedKey::EcP256 => SupportedAlgorithm::ES256,
             SupportedKey::EcP384 => SupportedAlgorithm::ES384,
             SupportedKey::EcP521 => SupportedAlgorithm::ES512,
-            SupportedKey::Ed25519 => SupportedAlgorithm::EdDSA
+            SupportedKey::Ed25519 => SupportedAlgorithm::EdDSA,
         }
     }
 
@@ -38,7 +38,7 @@ impl SupportedKey {
             "P-256" => Ok(SupportedKey::EcP256),
             "P-384" => Ok(SupportedKey::EcP384),
             "P-521" => Ok(SupportedKey::EcP521),
-            _ => Err(CryptoError::UnknownCurveError(crv.to_string()))
+            _ => Err(CryptoError::UnknownCurveError(crv.to_string())),
         }
     }
 
@@ -70,7 +70,7 @@ impl SupportedKey {
             SupportedKey::EcP256 => "EllipticCurve P-256",
             SupportedKey::EcP384 => "EllipticCurve P-384",
             SupportedKey::EcP521 => "EllipticCurve P-512",
-            SupportedKey::Ed25519 => "Ed DSA (Ed25519)"
+            SupportedKey::Ed25519 => "Ed DSA (Ed25519)",
         }
     }
 
@@ -97,7 +97,7 @@ impl SupportedKey {
             SupportedKey::EcP256 => Ok(32),
             SupportedKey::EcP384 => Ok(48),
             SupportedKey::EcP521 => Ok(66),
-            kt => Err(CryptoError::CoordinateSizeError(kt.to_string().to_string()))
+            kt => Err(CryptoError::CoordinateSizeError(kt.to_string().to_string())),
         }
     }
 }
@@ -120,7 +120,7 @@ impl Display for SupportedAlgorithm {
 impl Serialize for SupportedAlgorithm {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         serializer.serialize_str(&self.to_string())
     }
@@ -144,7 +144,7 @@ impl SupportedAlgorithm {
             "ES384" => Ok(SupportedAlgorithm::ES384),
             "ES512" => Ok(SupportedAlgorithm::ES512),
             "EdDSA" => Ok(SupportedAlgorithm::EdDSA),
-             default => Err(CryptoError::AlgorithmSupportError(default.to_string())),
+            default => Err(CryptoError::AlgorithmSupportError(default.to_string())),
         }
     }
 
@@ -154,7 +154,7 @@ impl SupportedAlgorithm {
             SupportedAlgorithm::ES256 => SupportedHash::SHA256,
             SupportedAlgorithm::ES384 => SupportedHash::SHA384,
             SupportedAlgorithm::ES512 => SupportedHash::SHA512,
-            SupportedAlgorithm::EdDSA => SupportedHash::SHA256
+            SupportedAlgorithm::EdDSA => SupportedHash::SHA256,
         }
     }
 }
@@ -162,7 +162,7 @@ impl SupportedAlgorithm {
 pub enum SupportedHash {
     SHA256,
     SHA384,
-    SHA512 // SHA512 is also for EdDSA
+    SHA512, // SHA512 is also for EdDSA
 }
 
 pub fn sha256_b64(data: &[u8]) -> String {

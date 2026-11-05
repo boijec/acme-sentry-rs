@@ -42,31 +42,36 @@ impl<'a> Job<'a> for PlaceOrderJob {
         self.order_service = Some(dependencies.services().order_service());
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<JobExecutionFlag, JobEngineError> {
+    async fn execute(
+        &self,
+        handle: SchedulerHandle<'a>,
+    ) -> Result<JobExecutionFlag, JobEngineError> {
         let services = (&self.user_service, &self.config, &self.order_service);
-        if let (
-            Some(user_service),
-            Some(config),
-            Some(order_service)
-        ) = services {
+        if let (Some(user_service), Some(config), Some(order_service)) = services {
             let user_id = config.get_user_id();
-            let user = user_service.get_user(&user_id)
+            let user = user_service
+                .get_user(&user_id)
                 .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
-                .ok_or_else(|| JobEngineError::JobExecutionError("No user found matching configured user_id".into()))?;
+                .ok_or_else(|| {
+                    JobEngineError::JobExecutionError(
+                        "No user found matching configured user_id".into(),
+                    )
+                })?;
 
             let domain = self.domain.clone();
 
-            let order = order_service.place_order_for_domain(domain, &user).await
+            let order = order_service
+                .place_order_for_domain(domain, &user)
+                .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
 
             handle
                 .submit(AcceptDnsChallengeJob::initialize(order.id))
                 .await?;
 
-            return Ok(JobExecutionFlag::Next)
+            return Ok(JobExecutionFlag::Next);
         }
         Err(JobEngineError::FlagError(ACMES133))
     }
 }
-

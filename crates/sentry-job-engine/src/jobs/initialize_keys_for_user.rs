@@ -30,14 +30,15 @@ impl<'a> Job<'a> for LoadLocalUserJob {
     }
     async fn execute(&self, _: SchedulerHandle<'a>) -> Result<JobExecutionFlag, JobEngineError> {
         let services = (&self.user_service, &self.config);
-        if let (
-            Some(user_service),
-            Some(config)
-        ) = services {
+        if let (Some(user_service), Some(config)) = services {
             let user_id = config.get_user_id();
-            let user = user_service.lazy_load_user(&user_id).await
+            let user = user_service
+                .lazy_load_user(&user_id)
+                .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
-            let _ = user_service.user_sanity_check(&user).await
+            let _ = user_service
+                .user_sanity_check(&user)
+                .await
                 .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
 
             return Ok(JobExecutionFlag::PreflightNext);

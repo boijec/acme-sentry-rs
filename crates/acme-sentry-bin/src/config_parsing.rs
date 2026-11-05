@@ -19,31 +19,60 @@ pub struct Args {
     pub initialize_with_base_dir: Option<String>,
     #[arg(short, long, default_value = "info", value_parser = log_level_parse, help = "Enable verbose logging")]
     pub logging_level: Level,
-    #[arg(long, default_value_t = false, help = "Enable application-mode (input is required from user to terminate application)")]
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Enable application-mode (input is required from user to terminate application)"
+    )]
     pub application_mode: bool,
-    #[arg(long, default_value_t = false, help = "Enable yaml config (enabled by default if application mode is on)")]
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Enable yaml config (enabled by default if application mode is on)"
+    )]
     pub yaml: bool,
     #[arg(long, help = "Location of the acme-sentry config file")]
     pub yaml_config: Option<String>,
-    #[arg(long, default_value = "ec-p256", help = "Specify what key type, that acme-sentry should use to log in to the CA with")]
+    #[arg(
+        long,
+        default_value = "ec-p256",
+        help = "Specify what key type, that acme-sentry should use to log in to the CA with"
+    )]
     pub requested_login_key_type: String,
     #[arg(long, help = "ACME system base url")]
     pub acme_base_url: Option<String>,
-    #[arg(long, default_value = "/opt/acme-sentry", help = "Application base directory")]
+    #[arg(
+        long,
+        default_value = "/opt/acme-sentry",
+        help = "Application base directory"
+    )]
     pub base_dir: String,
-    #[arg(long, default_value = "out", help = "Output directory of generated files")]
+    #[arg(
+        long,
+        default_value = "out",
+        help = "Output directory of generated files"
+    )]
     pub output_dir: String,
-    #[arg(long, help = "Absolute path to acme challenge plugin file in .so format")]
+    #[arg(
+        long,
+        help = "Absolute path to acme challenge plugin file in .so format"
+    )]
     pub with_challenge_plugins: Option<String>,
-    #[arg(long, help = "User id that acme-sentry shall persist reference to if this is not present, acme-sentry will generate a new user")]
+    #[arg(
+        long,
+        help = "User id that acme-sentry shall persist reference to if this is not present, acme-sentry will generate a new user"
+    )]
     pub with_user_id: Option<String>,
-    #[arg(long, help = "Email that acme-sentry shall try to connect with the user")]
+    #[arg(
+        long,
+        help = "Email that acme-sentry shall try to connect with the user"
+    )]
     pub with_email: Option<String>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct YamlConfig {
     #[serde(rename = "acme-sentry")]
-    pub acme_sentry_configuration: AcmeSentryConfiguration
+    pub acme_sentry_configuration: AcmeSentryConfiguration,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,20 +106,24 @@ pub struct LoggingConfig {
     pub logging_level: Option<Level>,
 }
 
-
 mod level_serde {
     use serde::{Deserialize, Deserializer, Serializer};
     use std::str::FromStr;
     use tracing::Level;
 
-    pub fn serialize<S: Serializer>(level: &Option<Level>, serializer: S) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(
+        level: &Option<Level>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         match level {
             Some(l) => serializer.serialize_some(&l.to_string()),
             None => serializer.serialize_none(),
         }
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Level>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Level>, D::Error> {
         let s = String::deserialize(deserializer)?;
         Ok(Some(Level::from_str(&s).unwrap_or(Level::INFO)))
     }
@@ -115,46 +148,47 @@ pub(crate) fn build_application_config(args: Args) -> anyhow::Result<Application
         let plugin_dir = yaml_config.acme_sentry_configuration.fs.acme_plugin;
         let discovery_type =
             check_plugins_directory(plugin_dir.as_str()).map_err(|e| anyhow!("{:?}", e))?;
-        Ok(
-            ApplicationConfig::builder()
-                .application_mode(application_mode)
-                .user_id(yaml_config
+        Ok(ApplicationConfig::builder()
+            .application_mode(application_mode)
+            .user_id(
+                yaml_config
                     .acme_sentry_configuration
                     .user
                     .id
-                    .unwrap_or(InternalIdTooling::new_compact_id()))
-                .user_email(yaml_config.acme_sentry_configuration.user.email)
-                .key_type(yaml_config.acme_sentry_configuration.user.key_type)
-                .logging_level(yaml_config.acme_sentry_configuration.logging.logging_level)
-                .base_dir(yaml_config.acme_sentry_configuration.fs.base_dir.clone())
-                .acme_challenge_plugin(plugin_dir)
-                .discovery_type(discovery_type.into())
-                .base_url(yaml_config.acme_sentry_configuration.base_url)
-                .build()
-        )
+                    .unwrap_or(InternalIdTooling::new_compact_id()),
+            )
+            .user_email(yaml_config.acme_sentry_configuration.user.email)
+            .key_type(yaml_config.acme_sentry_configuration.user.key_type)
+            .logging_level(yaml_config.acme_sentry_configuration.logging.logging_level)
+            .base_dir(yaml_config.acme_sentry_configuration.fs.base_dir.clone())
+            .acme_challenge_plugin(plugin_dir)
+            .discovery_type(discovery_type.into())
+            .base_url(yaml_config.acme_sentry_configuration.base_url)
+            .build())
     } else {
         let email = args.with_email;
         if args.with_challenge_plugins.is_none() {
-            return Err(anyhow!("Challenge plugin configuration is required for this mode"));
+            return Err(anyhow!(
+                "Challenge plugin configuration is required for this mode"
+            ));
         }
         let plugin_dir = args.with_challenge_plugins.unwrap();
         let discovery_type =
             check_plugins_directory(plugin_dir.as_str()).map_err(|e| anyhow!("{:?}", e))?;
-        Ok(
-            ApplicationConfig::builder()
-                .application_mode(application_mode)
-                .user_id(args
-                    .with_user_id
-                    .unwrap_or(InternalIdTooling::new_compact_id()))
-                .user_email(email.unwrap())
-                .key_type(args.requested_login_key_type)
-                .logging_level(Some(args.logging_level))
-                .base_dir(args.base_dir.clone())
-                .acme_challenge_plugin(plugin_dir)
-                .discovery_type(discovery_type.into())
-                .base_url(args.acme_base_url.unwrap())
-                .build()
-        )
+        Ok(ApplicationConfig::builder()
+            .application_mode(application_mode)
+            .user_id(
+                args.with_user_id
+                    .unwrap_or(InternalIdTooling::new_compact_id()),
+            )
+            .user_email(email.unwrap())
+            .key_type(args.requested_login_key_type)
+            .logging_level(Some(args.logging_level))
+            .base_dir(args.base_dir.clone())
+            .acme_challenge_plugin(plugin_dir)
+            .discovery_type(discovery_type.into())
+            .base_url(args.acme_base_url.unwrap())
+            .build())
     }
 }
 

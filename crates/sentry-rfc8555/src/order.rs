@@ -1,12 +1,10 @@
-use crate::challenge::ChallengeOperations;
 use crate::client::build_client;
-use crate::default::{ConvertOperation, DefaultOperations};
+use crate::default::DefaultOperations;
 use crate::error::{DefaultOperationsError, OrderOperationsError};
 use crate::idempotency::fetch_nonce;
 use crate::jws::try_validate_jws_response;
 use sentry_jose::keys::PrivateKey;
 use serde_json::{Value, json};
-use std::io::Read;
 use tracing::{debug, info};
 
 #[derive(Debug)]
@@ -59,7 +57,10 @@ impl OrderOperations {
         });
         let jws_body = self.build_jws_body_kid(protected, &payload)?;
 
-        info!("Sending newOrder request for domain '{}' to {}", domain, new_order_url);
+        info!(
+            "Sending newOrder request for domain '{}' to {}",
+            domain, new_order_url
+        );
         let resp = self
             .client
             .post(new_order_url)
@@ -89,7 +90,7 @@ impl OrderOperations {
             return Err(OrderOperationsError::OrderStatusError(
                 status,
                 domain.to_string(),
-                body
+                body,
             ));
         }
 
@@ -115,15 +116,5 @@ impl OrderOperations {
             authorization_url,
             finalize_url,
         })
-    }
-}
-
-impl ConvertOperation<ChallengeOperations> for OrderOperations {
-    fn convert(self) -> ChallengeOperations {
-        ChallengeOperations::__new(
-            self.private_key,
-            self.account_url,
-            self.client
-        )
     }
 }
