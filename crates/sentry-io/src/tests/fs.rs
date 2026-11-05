@@ -1,4 +1,4 @@
-use crate::fs::{FileSystemOperations, BasicUnixFileSystem};
+use crate::fs::{BasicUnixFileSystem, FileSystemOperations};
 use std::fs::read_to_string;
 use tempfile::tempdir;
 

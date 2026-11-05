@@ -1,5 +1,7 @@
 use crate::keys::PrivateKey;
 use openssl::hash::MessageDigest;
+use openssl::stack::Stack;
+use openssl::x509::extension::SubjectAlternativeName;
 use openssl::x509::{X509NameBuilder, X509Req, X509ReqBuilder};
 use std::error::Error;
 
@@ -48,6 +50,14 @@ pub fn build_csr_der(cn: &str, key: &PrivateKey) -> Result<Vec<u8>, Box<dyn Erro
     let mut req_builder = X509ReqBuilder::new()?;
     req_builder.set_subject_name(&name)?;
     req_builder.set_pubkey(pkey)?;
+    let mut san = SubjectAlternativeName::new();
+    san.dns(cn);
+    let context = req_builder.x509v3_context(None);
+    let san_ext = san.build(&context)?;
+    let mut ext_stack = Stack::new()?;
+    ext_stack.push(san_ext)?;
+    req_builder.add_extensions(&ext_stack)?;
+
     req_builder.sign(pkey, MessageDigest::sha256())?;
 
     Ok(req_builder.build().to_der()?)

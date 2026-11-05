@@ -1,6 +1,5 @@
-use std::string::ParseError;
-use thiserror::Error;
 use sentry_jose::error::KeyError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum HttpClientError {

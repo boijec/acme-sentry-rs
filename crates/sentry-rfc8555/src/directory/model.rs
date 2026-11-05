@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use sentry_common::iter::{CompareFields, FieldDiff};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AcmeDirectoryApi {

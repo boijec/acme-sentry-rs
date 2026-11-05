@@ -1,5 +1,3 @@
-use crate::directory::error::DirectoryServiceError;
-
 #[derive(Clone)]
 pub struct ServiceUserDirectory {
     pub key_change: String,

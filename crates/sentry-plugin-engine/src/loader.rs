@@ -1,3 +1,6 @@
+use crate::error::PluginEngineError;
+use crate::event::PluginEvent;
+use crate::run_mode::{DiscoveryType, RunMode};
 use acme_sentry_plugin_sdk_rs::context::RawContext;
 use acme_sentry_plugin_sdk_rs::ffi::FfiStr;
 use acme_sentry_plugin_sdk_rs::loader::{LoadedPlugin, UnloadPolicy, load_plugin};
@@ -11,9 +14,6 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use std::thread::JoinHandle;
 use tracing::info;
-use crate::error::PluginEngineError;
-use crate::event::PluginEvent;
-use crate::run_mode::{DiscoveryType, RunMode};
 
 struct PluginRunState {
     #[allow(unused)]

@@ -15,6 +15,8 @@ use tracing::{Level, error};
 pub struct Args {
     #[arg(short, long)]
     pub version: bool,
+    #[arg(long, default_value = None, help = "Initialize basic files and directories at the specified location")]
+    pub initialize_with_base_dir: Option<String>,
     #[arg(short, long, default_value = "info", value_parser = log_level_parse, help = "Enable verbose logging")]
     pub logging_level: Level,
     #[arg(long, default_value_t = false, help = "Enable application-mode (input is required from user to terminate application)")]
@@ -127,15 +129,6 @@ pub(crate) fn build_application_config(args: Args) -> anyhow::Result<Application
                 .base_dir(yaml_config.acme_sentry_configuration.fs.base_dir.clone())
                 .acme_challenge_plugin(plugin_dir)
                 .discovery_type(discovery_type.into())
-                .output_dir(
-                    PathBuf::from_str(
-                        yaml_config.acme_sentry_configuration.fs.base_dir.as_str(),
-                    )?
-                        .join(yaml_config.acme_sentry_configuration.fs.output_dir.as_str())
-                        .to_str()
-                        .unwrap()
-                        .to_string()
-                )
                 .base_url(yaml_config.acme_sentry_configuration.base_url)
                 .build()
         )
@@ -159,11 +152,6 @@ pub(crate) fn build_application_config(args: Args) -> anyhow::Result<Application
                 .base_dir(args.base_dir.clone())
                 .acme_challenge_plugin(plugin_dir)
                 .discovery_type(discovery_type.into())
-                .output_dir(PathBuf::from_str(args.base_dir.as_str())?
-                    .join(args.output_dir.as_str())
-                    .to_str()
-                    .unwrap()
-                    .to_string())
                 .base_url(args.acme_base_url.unwrap())
                 .build()
         )

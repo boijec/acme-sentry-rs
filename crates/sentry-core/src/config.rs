@@ -5,7 +5,6 @@ pub struct ApplicationConfig {
     pub application_mode: bool,
     pub base_url: String,
     pub base_dir: String,
-    pub output_dir: String,
     pub user_id: String,
     pub user_email: String,
     pub key_type: String,
@@ -19,7 +18,6 @@ pub struct ApplicationConfigBuilder {
     pub application_mode: bool,
     pub base_url: String,
     pub base_dir: String,
-    pub output_dir: String,
     pub user_id: String,
     pub user_email: String,
     pub key_type: String,
@@ -32,7 +30,6 @@ pub trait ConfigBuilder {
     fn application_mode(self, value: bool) -> Self;
     fn base_url(self, value: String) -> Self;
     fn base_dir(self, value: String) -> Self;
-    fn output_dir(self, value: String) -> Self;
     fn user_id(self, value: String) -> Self;
     fn user_email(self, value: String) -> Self;
     fn key_type(self, value: String) -> Self;
@@ -46,7 +43,6 @@ pub trait ConfigurationMap {
     fn get_application_mode(&self) -> bool;
     fn get_base_url(&self) -> String;
     fn get_base_dir(&self) -> String;
-    fn get_output_dir(&self) -> String;
     fn get_user_id(&self) -> String;
     fn get_user_email(&self) -> String;
     fn get_key_type(&self) -> String;
@@ -70,9 +66,6 @@ impl ConfigurationMap for ApplicationConfig {
     }
     fn get_base_dir(&self) -> String {
         self.base_dir.clone()
-    }
-    fn get_output_dir(&self) -> String {
-        self.output_dir.clone()
     }
     fn get_user_id(&self) -> String {
         self.user_id.clone()
@@ -107,11 +100,6 @@ impl ConfigBuilder for ApplicationConfigBuilder {
 
     fn base_dir(mut self, value: String) -> Self {
         self.base_dir = value;
-        self
-    }
-
-    fn output_dir(mut self, value: String) -> Self {
-        self.output_dir = value;
         self
     }
 
@@ -150,7 +138,6 @@ impl ConfigBuilder for ApplicationConfigBuilder {
             application_mode: self.application_mode,
             base_url: self.base_url,
             base_dir: self.base_dir,
-            output_dir: self.output_dir,
             key_type: self.key_type,
             user_email: self.user_email,
             user_id: self.user_id,

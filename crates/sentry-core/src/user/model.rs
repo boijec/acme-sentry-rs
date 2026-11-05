@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use sentry_jose::keys::PrivateKey;
 
 pub struct ServiceUser {

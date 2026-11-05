@@ -1,12 +1,10 @@
-use std::ops::Deref;
 use crate::dependencies::JobDependencies;
-use crate::error::JobEngineError;
-use crate::job::JobErrorCode::{ACMES132, ACMES133};
+use crate::error::{ACMES132, JobEngineError};
 use crate::job::{Job, JobExecutionFlag};
+use std::ops::Deref;
 use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::sync::{mpsc, oneshot, watch};
-use tokio::sync::watch::error::RecvError;
-use tracing::{Instrument, debug, error, info, instrument, warn};
+use tracing::{Instrument, debug, error, info, instrument};
 
 enum SchedulerMessage<'a> {
     Job(Box<dyn Job<'a>>),
@@ -147,7 +145,11 @@ impl<'a> Scheduler<'a> {
                             "Failed to execute step '{}' with error :: {}",
                             job_name, job_result
                         );
-                        let _ = self.report_tx.send(JobExecutionFlag::Fatal(ACMES132));
+                        if let JobEngineError::FlagError(e) = job_result {
+                            let _ = self.report_tx.send(e);
+                        } else {
+                            let _ = self.report_tx.send(ACMES132);
+                        }
                     }
                 }
                 SchedulerMessage::Shutdown(ack) => {
@@ -174,7 +176,7 @@ mod tests {
     use crate::job::{Job, JobExecutionFlag};
     use crate::scheduling::{Scheduler, SchedulerHandle};
     use async_trait::async_trait;
-    use tracing::{info, instrument, Instrument, Span, span};
+    use tracing::instrument;
 
     #[derive(Debug)]
     struct PrintJob {

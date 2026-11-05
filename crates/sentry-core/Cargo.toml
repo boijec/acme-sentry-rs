@@ -12,6 +12,7 @@ sentry-crypto.workspace = true
 sentry-jose.workspace = true
 sentry-db.workspace = true
 sentry-rfc8555.workspace = true
+sentry-plugin-engine.workspace = true
 
 async-trait.workspace = true
 tracing.workspace = true

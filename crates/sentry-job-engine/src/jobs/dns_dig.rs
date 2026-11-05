@@ -1,60 +1,42 @@
 use crate::dependencies::JobDependencies;
-use crate::error::JobEngineError;
-use crate::job::Job;
+use crate::error::{ACMES133, JobEngineError};
+use crate::job::{Job, JobExecutionFlag};
+use crate::jobs::generate_csr::GenerateCsrJob;
 use crate::scheduling::SchedulerHandle;
 use async_trait::async_trait;
+use sentry_core::challenge::model::ChallengeMark;
+use sentry_core::dns::service::DnsService;
+use sentry_core::order::service::OrderService;
+use std::sync::Arc;
 use tracing::{info, warn};
 
 /// Maximum number of polling retries before giving up on DNS propagation.
 const MAX_DIG_RETRIES: u32 = 30;
 
+#[derive(Default)]
 pub struct DnsDigJob {
-    pub order_id: i64,
-    pub user_id: String,
-    pub challenge_id: i64,
-    pub attempt: u32,
+    order_service: Option<Arc<OrderService>>,
+    dns_service: Option<Arc<DnsService>>,
+
+    order_id: i64,
+    attempt: u32,
 }
 
 impl DnsDigJob {
-    pub fn new(order_id: i64, user_id: String, challenge_id: i64) -> Self {
+    pub fn initialize(order_id: i64) -> Self {
         DnsDigJob {
             order_id,
-            user_id,
-            challenge_id,
-            attempt: 0,
+            attempt: 1,
+            ..Default::default()
         }
     }
 
     fn next_attempt(&self) -> Self {
         DnsDigJob {
             order_id: self.order_id,
-            user_id: self.user_id.clone(),
-            challenge_id: self.challenge_id,
             attempt: self.attempt + 1,
+            ..Default::default()
         }
-    }
-
-    async fn dig_txt(record_name: &str) -> anyhow::Result<Vec<String>> {
-        use std::process::Command;
-        let output = tokio::task::spawn_blocking({
-            let record_name = record_name.to_owned();
-            move || {
-                Command::new("dig")
-                    .args(["+short", "TXT", record_name.as_str()])
-                    .output()
-            }
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("dig task panicked: {}", e))?
-        .map_err(|e| anyhow::anyhow!("Failed to execute dig: {}", e))?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let values: Vec<String> = stdout
-            .lines()
-            .filter(|l| !l.is_empty())
-            .map(|l| l.trim_matches('"').to_owned())
-            .collect();
-        Ok(values)
     }
 }
 
@@ -64,69 +46,75 @@ impl<'a> Job<'a> for DnsDigJob {
         "dns-dig-job"
     }
 
-    fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
-        return;
+    fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
+        self.order_service = Some(dependencies.services().order_service());
+        self.dns_service = Some(dependencies.services().dns_service());
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
-        let conn = DatabaseConnection::get_connection()
-            .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
+    async fn execute(
+        &self,
+        handle: SchedulerHandle<'a>,
+    ) -> Result<JobExecutionFlag, JobEngineError> {
+        let services = (&self.order_service, &self.dns_service);
+        if let (
+            Some(order_service),
+            Some(dns_service),
+        ) = services {
+            let id = self.order_id.clone();
+            let challenge = order_service
+                .get_order_challenge(id)
+                .await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
+                .ok_or_else(|| {
+                    JobEngineError::JobExecutionError("No challenge found for order".into())
+                })?;
 
-        let challenge = AcmeDnsChallenge::get_for_order(self.order_id, &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to load challenge: {}", e))?
-            .ok_or_else(|| anyhow::anyhow!("No challenge found for order {}", self.order_id))?;
-
-        // Compute the expected TXT value from key_authorization (base64url of sha256)
-        let expected_txt =
-            acme_client::crypto::sha256_b64(challenge.key_authorization.as_bytes());
-
-        info!(
-            "Dig attempt {}/{} for '{}' expecting TXT='{}'",
-            self.attempt + 1,
-            MAX_DIG_RETRIES,
-            challenge.dns_record_name,
-            expected_txt
-        );
-
-        let records = Self::dig_txt(&challenge.dns_record_name).await?;
-        let propagated = records.iter().any(|r| r == &expected_txt);
-
-        if propagated {
             info!(
-                "DNS TXT record for '{}' confirmed! Marking challenge as valid.",
-                challenge.dns_record_name
+                "Dig attempt {}/{}",
+                self.attempt,
+                MAX_DIG_RETRIES,
             );
-            AcmeDnsChallenge::set_status(challenge.id, "valid", &conn)
-                .map_err(|e| anyhow::anyhow!("Failed to update challenge status: {}", e))?;
-
-            handle
-                .submit(GenerateCsrJob::new(self.order_id, self.user_id.clone()))
+            let propagated = dns_service
+                .compute_and_dig(&challenge)
                 .await
-                .map_err(|e| anyhow::anyhow!("Failed to submit GenerateCsrJob: {}", e))?;
-        } else if self.attempt >= MAX_DIG_RETRIES {
-            warn!(
-                "DNS TXT record for '{}' not found after {} attempts — marking order as invalid.",
-                challenge.dns_record_name, MAX_DIG_RETRIES
-            );
-            AcmeOrder::set_status(self.order_id, "invalid", &conn)
-                .map_err(|e| anyhow::anyhow!("Failed to update order status: {}", e))?;
-            AcmeDnsChallenge::set_status(challenge.id, "invalid", &conn)
-                .map_err(|e| anyhow::anyhow!("Failed to update challenge status: {}", e))?;
-        } else {
-            warn!(
-                "DNS TXT record for '{}' not yet visible (attempt {}/{}). Retrying in 30s.",
-                challenge.dns_record_name,
-                self.attempt + 1,
-                MAX_DIG_RETRIES
-            );
-            // Brief delay before re-queuing so we don't hammer immediately
-            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-            handle
-                .submit(self.next_attempt())
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to re-submit DnsDigJob: {}", e))?;
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+            return if propagated {
+                let order = order_service.__get_order_any(id)
+                    .await
+                    .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+                order_service.mark(order, ChallengeMark::Verified)
+                    .await
+                    .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+                handle
+                    .submit(GenerateCsrJob::initialize(id))
+                    .await?;
+                Ok(JobExecutionFlag::Next)
+            } else if self.attempt >= MAX_DIG_RETRIES {
+                warn!(
+                    "DNS TXT record for '{}' not found after {} attempts — marking order as invalid.",
+                    challenge.dns_record_name, MAX_DIG_RETRIES
+                );
+                let order = order_service.__get_order_any(id)
+                    .await
+                    .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+                order_service.mark(order, ChallengeMark::Failed)
+                    .await
+                    .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+                Ok(JobExecutionFlag::Stop)
+            } else {
+                warn!(
+                    "DNS TXT record for '{}' not yet visible (attempt {}/{}). Retrying in 30s.",
+                    challenge.dns_record_name,
+                    self.attempt,
+                    MAX_DIG_RETRIES
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                handle
+                    .submit(self.next_attempt())
+                    .await?;
+                Ok(JobExecutionFlag::Next)
+            }
         }
-
-        Ok(())
+        Err(JobEngineError::FlagError(ACMES133))
     }
 }

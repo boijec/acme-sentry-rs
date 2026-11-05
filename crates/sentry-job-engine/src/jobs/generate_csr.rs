@@ -1,18 +1,29 @@
-use async_trait::async_trait;
-use tracing::info;
 use crate::dependencies::JobDependencies;
-use crate::error::JobEngineError;
-use crate::job::Job;
+use crate::error::{ACMES133, JobEngineError};
+use crate::job::{Job, JobExecutionFlag};
+use crate::jobs::download_certificate::DownloadCertificateJob;
 use crate::scheduling::SchedulerHandle;
+use async_trait::async_trait;
+use sentry_core::config::{ApplicationConfig, ConfigurationMap};
+use sentry_core::order::service::OrderService;
+use sentry_core::user::service::UserService;
+use std::sync::Arc;
 
+#[derive(Default)]
 pub struct GenerateCsrJob {
-    pub order_id: i64,
-    pub user_id: String,
+    application_config: Option<Arc<ApplicationConfig>>,
+    user_service: Option<Arc<UserService>>,
+    order_service: Option<Arc<OrderService>>,
+
+    order_id: i64,
 }
 
 impl GenerateCsrJob {
-    pub fn new(order_id: i64, user_id: String) -> Self {
-        GenerateCsrJob { order_id, user_id }
+    pub fn initialize(order_id: i64) -> Self {
+        GenerateCsrJob {
+            order_id,
+            ..Default::default()
+        }
     }
 }
 
@@ -22,76 +33,38 @@ impl<'a> Job<'a> for GenerateCsrJob {
         "generate-csr-job"
     }
 
-    fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
-        return;
+    fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
+        self.application_config = Some(dependencies.configuration());
+        self.user_service = Some(dependencies.services().user_service());
+        self.order_service = Some(dependencies.services().order_service());
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
-        let conn = DatabaseConnection::get_connection()
-            .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
-
-        let user = AcmeUser::get_user(self.user_id.as_str(), &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to look up user: {}", e))?
-            .ok_or_else(|| anyhow::anyhow!("User '{}' not found", self.user_id))?;
-
-        let order = AcmeOrder::get_by_id(self.order_id, &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to load order {}: {}", self.order_id, e))?
-            .ok_or_else(|| anyhow::anyhow!("Order {} not found", self.order_id))?;
-
-        let finalize_url = order
-            .finalize_url
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Order {} has no finalize_url", self.order_id))?
-            .clone();
-
-        let account_link = AcmeAccountLink::get_for_user(user.id, &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to load account link: {}", e))?
-            .ok_or_else(|| anyhow::anyhow!("No account link for user '{}'", self.user_id))?;
-
-        let dir = AcmeDirectory::get_existing(user.id, &conn)?
-            .ok_or_else(|| anyhow::anyhow!("No ACME directory for user '{}'", self.user_id))?;
-
-        let private_key = load_private_key(&user.user_id, &user.key_path, &user.key_type)?;
-
-        let acme = AcmeAccountClient::new(private_key, account_link.account_url, true)
-            .map_err(|e| anyhow::anyhow!("Failed to create ACME client: {}", e))?;
-
-        let challenge_info = AcmeDnsChallenge::get_for_order(self.order_id, &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to load challenge for order: {}", e))?.unwrap();
-
-        // TODO: use challenge url from DB
-        acme.notify_challenge_ready(&dir.new_nonce, "")
-            .await?;
-
-        info!(
-            "DNS challenge (id={}) persisted and CA notified. Submitting DnsDigJob.",
-            challenge_info.id
-        );
-
-        info!(
-            "Sending finalize request for domain '{}' (order {}).",
-            order.domain, self.order_id
-        );
-
-        let result = acme
-            .finalize(&dir.new_nonce, &finalize_url, &order.domain)
-            .await?;
-
-        if let Some(cert_url) = result.certificate_url {
-            AcmeOrder::set_certificate_url(self.order_id, &cert_url, &conn)
-                .map_err(|e| anyhow::anyhow!("Failed to set certificate_url: {}", e))?;
-            info!("Certificate URL available: {}", cert_url);
-        } else {
-            info!("Order is being processed — certificate URL not yet available.");
-            AcmeOrder::set_status(self.order_id, "processing", &conn)
-                .map_err(|e| anyhow::anyhow!("Failed to update order status: {}", e))?;
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<JobExecutionFlag, JobEngineError> {
+        let services = (&self.application_config, &self.user_service, &self.order_service);
+        if let (
+            Some(config),
+            Some(user_service),
+            Some(order_service),
+        ) = services {
+            let user_id = config.get_user_id();
+            let user = user_service.get_user(&user_id)
+                .await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
+                .ok_or_else(|| JobEngineError::JobExecutionError("User not found".into()))?;
+            let pkey = user_service.create_private_key_for_cert(&user)
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+            let order_id = self.order_id.clone();
+            let order = order_service.get_order(order_id, &user)
+                .await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+            order_service.finalize(&order, &user, &pkey)
+                .await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+            handle
+                .submit(DownloadCertificateJob::initialize(order_id))
+                .await?;
+            return Ok(JobExecutionFlag::Next)
         }
-
-        handle
-            .submit(DownloadCertificateJob::new(self.order_id, self.user_id.clone()))
-            .await
-            .map_err(|_| anyhow::anyhow!("Failed to submit DownloadCertificateJob"))?;
-
-        Ok(())
+        Err(JobEngineError::FlagError(ACMES133))
     }
 }

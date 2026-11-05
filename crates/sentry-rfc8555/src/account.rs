@@ -1,3 +1,4 @@
+use crate::client::build_client;
 use crate::default::DefaultOperations;
 use crate::error::{AcmeAccountError, DefaultOperationsError};
 use crate::idempotency::fetch_nonce;
@@ -5,7 +6,6 @@ use crate::jws::{
     build_jws_body_jwk,
     try_validate_jws_response,
 };
-use crate::client::build_client;
 use sentry_jose::jwk::GenericJwk;
 use sentry_jose::keys::PrivateKey;
 use serde::{Deserialize, Serialize};

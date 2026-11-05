@@ -1,9 +1,9 @@
+use crate::client::build_client;
+use crate::directory::model::AcmeDirectoryApi;
 use crate::error::DirectoryOperationsError;
 use reqwest::{Client, Url};
 use serde_json::Value;
 use tracing::info;
-use crate::client::build_client;
-use crate::directory::model::AcmeDirectoryApi;
 
 pub struct DirectoryOperations {
     url: Url,

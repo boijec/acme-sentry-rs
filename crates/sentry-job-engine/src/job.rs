@@ -1,7 +1,7 @@
-use async_trait::async_trait;
 use crate::dependencies::JobDependencies;
 use crate::error::JobEngineError;
 use crate::scheduling::SchedulerHandle;
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait Job<'a>: Send + 'a {
@@ -23,16 +23,20 @@ pub enum JobExecutionFlag {
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum JobErrorCode {
-    ACMES132,
-    ACMES133,
+    Code(i32),
 }
 
 impl JobErrorCode {
     #[allow(unreachable_patterns)]
     pub fn explain(&self) -> String {
         match self {
-            JobErrorCode::ACMES132 => "(acmes123): job pipeline broken".to_uppercase(),
-            JobErrorCode::ACMES133 => "(acmes133): inadequate dependencies during job execution".to_uppercase(),
+            JobErrorCode::Code(err) => {
+                match err {
+                    132 => "(acmes123): job pipeline broken".to_uppercase(),
+                    133 => "(acmes133): inadequate dependencies during job execution".to_uppercase(),
+                    _ => format!("unmapped error code -> '{}'", err).to_uppercase(),
+                }
+            },
             code => format!("unmapped error code -> '{:?}'", code).to_uppercase(),
         }
     }

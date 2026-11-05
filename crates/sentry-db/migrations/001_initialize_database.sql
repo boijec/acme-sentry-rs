@@ -46,7 +46,9 @@ CREATE TABLE IF NOT EXISTS acme_dns_challenges(
     token TEXT(512) NOT NULL,
     key_authorization TEXT(1024) NOT NULL,
     dns_record_name TEXT(512) NOT NULL,
+    txt_record_value TEXT(512) NOT NULL,
     status TEXT(32) NOT NULL DEFAULT 'pending',
+    challenge_ready_url TEXT(512) NOT NULL,
     FOREIGN KEY (order_id) REFERENCES acme_orders(id) ON DELETE RESTRICT
 );
 

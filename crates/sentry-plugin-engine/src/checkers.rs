@@ -1,7 +1,7 @@
-use std::fs::read_dir;
-use std::path::Path;
 use crate::error::PluginEngineError;
 use crate::run_mode::DiscoveryType;
+use std::fs::read_dir;
+use std::path::Path;
 
 pub fn check_plugins_directory(str_path: &str) -> Result<DiscoveryType, PluginEngineError> {
     let path = Path::new(str_path);

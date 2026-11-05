@@ -1,33 +1,43 @@
-use async_trait::async_trait;
-use tracing::info;
 use crate::dependencies::JobDependencies;
-use crate::error::JobEngineError;
-use crate::job::Job;
+use crate::error::{ACMES133, JobEngineError};
+use crate::job::{Job, JobExecutionFlag};
 use crate::scheduling::SchedulerHandle;
+use async_trait::async_trait;
+use sentry_core::config::{ApplicationConfig, ConfigurationMap};
+use sentry_core::order::error::OrderServiceError;
+use sentry_core::order::model::DownloadStatus;
+use sentry_core::order::service::OrderService;
+use sentry_core::user::service::UserService;
+use std::sync::Arc;
+use tracing::{error, info};
 
 /// Polling retries before giving up on a processing order.
 const MAX_POLL_RETRIES: u32 = 20;
 
+#[derive(Default)]
 pub struct DownloadCertificateJob {
-    pub order_id: i64,
-    pub user_id: String,
-    pub attempt: u32,
+    application_config: Option<Arc<ApplicationConfig>>,
+    user_service: Option<Arc<UserService>>,
+    order_service: Option<Arc<OrderService>>,
+
+    order_id: i64,
+    attempt: u32,
 }
 
 impl DownloadCertificateJob {
-    pub fn new(order_id: i64, user_id: String) -> Self {
+    pub fn initialize(order_id: i64) -> Self {
         DownloadCertificateJob {
             order_id,
-            user_id,
-            attempt: 0,
+            attempt: 1,
+            ..Default::default()
         }
     }
 
     fn next_attempt(&self) -> Self {
         DownloadCertificateJob {
             order_id: self.order_id,
-            user_id: self.user_id.clone(),
             attempt: self.attempt + 1,
+            ..Default::default()
         }
     }
 }
@@ -38,100 +48,63 @@ impl<'a> Job<'a> for DownloadCertificateJob {
         "download-certificate-job"
     }
 
-    fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
-        return;
+    fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
+        self.application_config = Some(dependencies.configuration());
+        self.user_service = Some(dependencies.services().user_service());
+        self.order_service = Some(dependencies.services().order_service());
     }
 
-    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<(), JobEngineError> {
-        let conn = DatabaseConnection::get_connection()
-            .map_err(|e| anyhow::anyhow!("DB connection failed: {}", e))?;
-
-        let user = AcmeUser::get_user(self.user_id.as_str(), &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to look up user: {}", e))?
-            .ok_or_else(|| anyhow::anyhow!("User '{}' not found", self.user_id))?;
-
-        let order = AcmeOrder::get_by_id(self.order_id, &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to load order {}: {}", self.order_id, e))?
-            .ok_or_else(|| anyhow::anyhow!("Order {} not found", self.order_id))?;
-
-        let account_link = AcmeAccountLink::get_for_user(user.id, &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to load account link: {}", e))?
-            .ok_or_else(|| anyhow::anyhow!("No account link for user '{}'", self.user_id))?;
-
-        let dir = AcmeDirectory::get_existing(user.id, &conn)?
-            .ok_or_else(|| anyhow::anyhow!("No ACME directory for user '{}'", self.user_id))?;
-
-        let private_key = load_private_key(&user.user_id, &user.key_path, &user.key_type)?;
-
-        let acme = AcmeAccountClient::new(private_key, account_link.account_url, true)
-            .map_err(|e| anyhow::anyhow!("Failed to create ACME client: {}", e))?;
-
-        // If certificate_url is not yet set, poll the order URL for an update
-        let certificate_url = if let Some(cert_url) = &order.certificate_url {
-            cert_url.clone()
-        } else {
-            let order_url = order
-                .order_url
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Order {} has no order_url to poll", self.order_id))?
-                .clone();
-
-            match acme
-                .poll_order_certificate_url(&dir.new_nonce, &order_url)
-                .await?
-            {
-                Some(cert_url) => {
-                    AcmeOrder::set_certificate_url(self.order_id, &cert_url, &conn)
-                        .map_err(|e| anyhow::anyhow!("Failed to persist certificate_url: {}", e))?;
-                    cert_url
-                }
-                None if self.attempt < MAX_POLL_RETRIES => {
+    async fn execute(&self, handle: SchedulerHandle<'a>) -> Result<JobExecutionFlag, JobEngineError> {
+        let services = (&self.application_config, &self.user_service, &self.order_service);
+        if let (
+            Some(config),
+            Some(user_service),
+            Some(order_service),
+        ) = services {
+            let user_id = config.get_user_id();
+            let user = user_service.get_user(&user_id)
+                .await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
+                .ok_or_else(|| JobEngineError::JobExecutionError(format!("user {} not found", user_id)))?;
+            let order_id = self.order_id.clone();
+            let order = order_service.get_order(order_id, &user)
+                .await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+            let result = order_service.try_download_pem(&order, &user)
+                .await
+                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+            let status = match result {
+                DownloadStatus::Result(bytes) => Some(bytes),
+                DownloadStatus::ContinuePolling => None,
+            };
+            return if let Some(certificate_bytes) = status {
+                user_service.create_pem_from_bytes(&user, order_id, certificate_bytes)
+                    .await
+                    .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+                Ok(JobExecutionFlag::Stop)
+            } else {
+                return if self.attempt < MAX_POLL_RETRIES {
                     info!(
                         "Order {} still processing (attempt {}/{}). Retrying in 10s.",
                         self.order_id,
-                        self.attempt + 1,
+                        self.attempt,
                         MAX_POLL_RETRIES
                     );
                     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
                     handle
                         .submit(self.next_attempt())
-                        .await
-                        .map_err(|_| {
-                            anyhow::anyhow!("Failed to re-submit DownloadCertificateJob")
-                        })?;
-                    return Ok(());
-                }
-                None => {
-                    return Err(anyhow::anyhow!(
+                        .await?;
+                    Ok(JobExecutionFlag::Next)
+                } else {
+                    error!(
                         "Order {} did not become valid after {} poll attempts.",
                         self.order_id,
                         MAX_POLL_RETRIES
-                    ));
+                    );
+                    Ok(JobExecutionFlag::Stop)
                 }
             }
-        };
-
-        let cert_bytes = acme
-            .download_certificate(&dir.new_nonce, &certificate_url)
-            .await?;
-
-        let config = APPLICATION_CONFIG.get().unwrap();
-        let cert_path = format!(
-            "{}/{}.crt.pem",
-            config.output_dir,
-            order.domain.replace('.', "_")
-        );
-        std::fs::write(&cert_path, &cert_bytes)
-            .map_err(|e| anyhow::anyhow!("Failed to write certificate to '{}': {}", cert_path, e))?;
-
-        info!(
-            "Certificate for domain '{}' saved to '{}'.",
-            order.domain, cert_path
-        );
-
-        AcmeCertificate::record(self.order_id, &cert_path, &conn)
-            .map_err(|e| anyhow::anyhow!("Failed to record certificate in DB: {}", e))?;
-
-        Ok(())
+        }
+        Err(JobEngineError::FlagError(ACMES133))
     }
 }

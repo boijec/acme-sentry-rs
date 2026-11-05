@@ -5,12 +5,12 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DirectoryServiceError {
-    #[error("File system error in directory service: {0}")]
+    #[error("File system error in directory service :: {0}")]
     FileSystemError(#[from] FileSystemError),
-    #[error("Database error in directory service: {0}")]
+    #[error("Database error in directory service :: {0}")]
     DirectoryDatabaseError(#[from] DatabaseError),
-    #[error("Key error in directory service: {0}")]
+    #[error("Key error in directory service :: {0}")]
     DirectoryKeyError(#[from] KeyError),
-    #[error("Internal error in directory service: {0}")]
+    #[error("Internal error in directory service :: {0}")]
     InternalError(String),
 }

@@ -1,13 +1,13 @@
-use std::io::Read;
-use serde_json::{json, Value};
-use tracing::{debug, info};
-use sentry_jose::keys::PrivateKey;
 use crate::challenge::ChallengeOperations;
 use crate::client::build_client;
 use crate::default::{ConvertOperation, DefaultOperations};
 use crate::error::{DefaultOperationsError, OrderOperationsError};
 use crate::idempotency::fetch_nonce;
 use crate::jws::try_validate_jws_response;
+use sentry_jose::keys::PrivateKey;
+use serde_json::{Value, json};
+use std::io::Read;
+use tracing::{debug, info};
 
 #[derive(Debug)]
 pub struct PlaceOrderResult {

@@ -1,7 +1,7 @@
-use serde_json::json;
-use sentry_crypto::crypto::SupportedKey;
 use crate::jws::{Jws, JwsHeader};
 use crate::keys::PrivateKey;
+use sentry_crypto::crypto::SupportedKey;
+use serde_json::json;
 
 #[test]
 fn test_signing_jws() {

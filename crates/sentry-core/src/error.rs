@@ -1,7 +1,7 @@
-use thiserror::Error;
 use sentry_crypto::error::CryptoError;
 use sentry_io::fs::FileSystemError;
 use sentry_jose::error::KeyError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum LoadKeyError {
@@ -13,6 +13,12 @@ pub enum LoadKeyError {
     UnsupportedKeyType(CryptoError, String),
     #[error("Failed to instantiate key bytes: {1} - {0}")]
     FailedToInstantiateKey(KeyError, String),
+}
+
+#[derive(Error, Debug)]
+pub enum SharedResourceError {
+    #[error("Could not continue due to missing resource - {0}")]
+    MissingResource(String),
 }
 
 #[derive(Error, Debug)]

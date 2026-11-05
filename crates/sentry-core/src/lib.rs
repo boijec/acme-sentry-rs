@@ -5,3 +5,5 @@ pub mod user;
 pub mod config;
 pub mod directory;
 pub mod order;
+pub mod challenge;
+pub mod dns;

@@ -1,15 +1,16 @@
 use crate::config::{ApplicationConfig, ConfigurationMap};
-use crate::directory::model::ServiceUserDirectory;
+use crate::directory::service::DirectoryService;
 use crate::user::error::UserServiceError;
 use crate::user::model::ServiceUser;
 use sentry_crypto::crypto::SupportedKey;
 use sentry_db::repo::account_link_repo::{AccountLink, AccountLinkRepo};
+use sentry_db::repo::certificate_repo::CertificateRepo;
 use sentry_db::repo::user_repo::{User, UserRepo};
 use sentry_io::fs::FileSystemOperations;
 use sentry_jose::keys::PrivateKey;
 use sentry_rfc8555::account::login_or_register;
 use std::path::Path;
-use std::sync::{Arc};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, info, instrument, warn};
 
@@ -17,7 +18,10 @@ pub struct UserService {
     configuration: Arc<ApplicationConfig>,
     user_repo: Arc<dyn UserRepo + Send + Sync>,
     account_link_repo: Arc<dyn AccountLinkRepo + Send + Sync>,
+    certificate_repo: Arc<dyn CertificateRepo + Send + Sync>,
     file_system_operations: Arc<dyn FileSystemOperations + Send + Sync>,
+
+    directory_service: Arc<DirectoryService>,
 
     account_resource: Arc<Mutex<Option<String>>>,
     private_key: Arc<Mutex<Option<PrivateKey>>>,
@@ -27,14 +31,18 @@ impl UserService {
     pub fn new(
         user_repo: Arc<dyn UserRepo + Send + Sync>,
         account_link_repo: Arc<dyn AccountLinkRepo + Send + Sync>,
+        certificate_repo: Arc<dyn CertificateRepo + Send + Sync>,
         configuration: Arc<ApplicationConfig>,
         file_system_operations: Arc<dyn FileSystemOperations + Send + Sync>,
+        directory_service: Arc<DirectoryService>,
     ) -> Self {
         Self {
             configuration,
             user_repo,
+            certificate_repo,
             account_link_repo,
             file_system_operations,
+            directory_service,
             account_resource: Arc::new(Mutex::new(None)),
             private_key: Arc::new(Mutex::new(None)),
         }
@@ -117,7 +125,10 @@ impl UserService {
         (dump_path, key_path)
     }
 
-    async fn build_service_user_from_service_user(&self, user: User) -> Result<ServiceUser, UserServiceError> {
+    async fn build_service_user_from_service_user(
+        &self,
+        user: User,
+    ) -> Result<ServiceUser, UserServiceError> {
         let mut serv_user = ServiceUser::builder()
             .id(user.id())
             .user_id(user.user_id())
@@ -178,55 +189,110 @@ impl UserService {
         }
         Ok(())
     }
-    #[instrument(skip(self, user, directory))]
-    pub async fn login(&self, user: &ServiceUser, directory: &ServiceUserDirectory) -> Result<(), UserServiceError> {
-        let private_key = self.private_key
-            .lock()
+    #[instrument(skip(self, user))]
+    pub async fn login(&self, user: &ServiceUser) -> Result<(), UserServiceError> {
+        let directory = self
+            .directory_service
+            .fetch()
             .await
-            .clone()
-            .ok_or_else(|| UserServiceError::InternalError("No private key resource to use for login".into()))?;
+            .map_err(|e| UserServiceError::InternalError(e.to_string()))?;
+        let private_key = self.private_key.lock().await.clone().ok_or_else(|| {
+            UserServiceError::InternalError("No private key resource to use for login".into())
+        })?;
         let acc_resource = login_or_register(
             &private_key,
             &directory.new_nonce,
             &directory.new_account,
             true,
-        ).await
-            .map_err(|e| UserServiceError::InternalError(format!("Unable to register user: {}", e)))?;
-        self.upsert_account_link(user, acc_resource.clone())
-            .await?;
-        let mut account_resource = self.account_resource
-            .lock()
-            .await;
+        )
+        .await
+        .map_err(|e| UserServiceError::InternalError(format!("Unable to register user: {}", e)))?;
+        self.upsert_account_link(user, acc_resource.clone()).await?;
+        let mut account_resource = self.account_resource.lock().await;
         *account_resource = Some(acc_resource.clone());
         Ok(())
     }
 
-    async fn upsert_account_link(&self, user: &ServiceUser, acc_resource: String) -> Result<(), UserServiceError> {
-        let account_link = self.account_link_repo
+    pub fn create_private_key_for_cert(
+        &self,
+        user: &ServiceUser,
+    ) -> Result<PrivateKey, UserServiceError> {
+        let supported_key = SupportedKey::from_str(user.key_type.as_str())?;
+        let pkey = PrivateKey::from_supported_type(supported_key)?;
+        let bytes = pkey.get_pem_bytes()?;
+        let _ = self.file_system_operations.write_to_file(
+            &user.user_dump_path,
+            "new_key.pem",
+            bytes.as_slice(),
+        )?;
+        Ok(pkey)
+    }
+
+    async fn upsert_account_link(
+        &self,
+        user: &ServiceUser,
+        acc_resource: String,
+    ) -> Result<(), UserServiceError> {
+        let account_link = self
+            .account_link_repo
             .get_link_for_user(user.id)
             .await
             .map_err(|e| UserServiceError::InternalError(e.to_string()))?;
         if let Some(link) = account_link {
-            debug!("Existing account link found for user: '{}' - updating", user.user_id);
-            let _ = self.account_link_repo.update_linked_user(
-                AccountLink::builder()
-                    .id(link.id())
-                    .user_id(link.user_id())
-                    .account_url(acc_resource)
-                    .build()
-            ).await
+            debug!(
+                "Existing account link found for user: '{}' - updating",
+                user.user_id
+            );
+            let _ = self
+                .account_link_repo
+                .update_linked_user(
+                    AccountLink::builder()
+                        .id(link.id())
+                        .user_id(link.user_id())
+                        .account_url(acc_resource)
+                        .build(),
+                )
+                .await
                 .map_err(|e| UserServiceError::InternalError(e.to_string()))?;
         } else {
-            warn!("No account link found for user: '{}' - creating", user.user_id);
-            let _ = self.account_link_repo.insert_linked_user(
-                AccountLink::builder()
-                    .user_id(user.id)
-                    .account_url(acc_resource)
-                    .build()
-            ).await
+            warn!(
+                "No account link found for user: '{}' - creating",
+                user.user_id
+            );
+            let _ = self
+                .account_link_repo
+                .insert_linked_user(
+                    AccountLink::builder()
+                        .user_id(user.id)
+                        .account_url(acc_resource)
+                        .build(),
+                )
+                .await
                 .map_err(|e| UserServiceError::InternalError(e.to_string()))?;
         }
         debug!("Account link saved for user: '{}'.", user.user_id);
+        Ok(())
+    }
+
+    pub async fn create_pem_from_bytes(
+        &self,
+        user: &ServiceUser,
+        order_id: i64,
+        bytes: Vec<u8>,
+    ) -> Result<(), UserServiceError> {
+        let path = self.file_system_operations.write_to_file(
+            user.user_dump_path.as_str(),
+            "sample_cert.crt",
+            bytes.as_slice(),
+        )?;
+        let path_str = path.to_str().ok_or_else(|| {
+            UserServiceError::InternalError("Unable to convert path to string".into())
+        })?;
+        info!("Certificate for domain saved at '{}'", path_str);
+        self.certificate_repo
+            .log_downloaded(order_id, path_str.to_string())
+            .await
+            .map_err(|e| UserServiceError::InternalError(e.to_string()))?;
         Ok(())
     }
 }

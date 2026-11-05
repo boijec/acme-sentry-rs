@@ -176,8 +176,9 @@ impl ChallengeOperations {
         new_nonce_url: &str,
         finalize_url: &str,
         domain: &str,
+        certificate_private_key: &PrivateKey,
     ) -> Result<FinalizeResult, ChallengeOperationsError> {
-        let csr_der = build_csr_der(domain, &self.private_key)
+        let csr_der = build_csr_der(domain, certificate_private_key)
             .map_err(|_| ChallengeOperationsError::CrsGenerationError(domain.to_string()))?;
         let csr_b64 = encode_b64(&csr_der);
 

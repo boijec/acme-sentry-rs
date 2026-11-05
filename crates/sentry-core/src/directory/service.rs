@@ -2,7 +2,7 @@ use crate::config::ApplicationConfig;
 use crate::directory::error::DirectoryServiceError;
 use crate::directory::model::ServiceUserDirectory;
 use sentry_rfc8555::directory::operations::DirectoryOperations;
-use std::sync::{Arc};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub struct DirectoryService {
