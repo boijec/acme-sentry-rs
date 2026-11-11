@@ -1,8 +1,9 @@
-use crate::config_parsing::{Args, build_application_config};
+use crate::clap_config::{Operation, argument_man};
+use crate::config_parsing::build_application_config;
 use anyhow::anyhow;
-use clap::{Parser, crate_version};
+use clap::{crate_authors, crate_version};
 use sentry_api::server::start_http_server;
-use sentry_core::config::ApplicationConfig;
+use sentry_core::config::{ApplicationConfig, ConfigurationMap};
 use sentry_core::services::initialize_services;
 use sentry_db::pool::connect;
 use sentry_db::repo::initialize_repos;
@@ -15,53 +16,66 @@ use std::sync::Arc;
 use tracing::{Instrument, Span, error, info, info_span};
 
 mod config_parsing;
+mod clap_config;
+mod sanity_checker;
 
 enum EndState {
     Success,
     Failure,
 }
 
-fn splash(print_version: bool) {
-    print!(
+fn splash() -> String {
+    format!(
         "{}\n",
         String::from_utf8_lossy(include_bytes!("../../../assets/ico.bin"))
-    );
-    if print_version {
-        println!("Version: {}", crate_version!());
-        print!(
-            "{}\n",
-            String::from_utf8_lossy(include_bytes!("../../../assets/creators.bin"))
-        );
-    }
+    )
 }
 
-fn main() {
-    let args = Args::parse();
-    splash(args.clone().version);
-    if args.version {
-        return;
+fn version() -> &'static str {
+    format!("Version: {}\n", crate_version!()).leak()
+}
+
+fn about() -> &'static str {
+    let authors = format!("By: {}\n", crate_authors!());
+    format!("{}{}{}", splash(), version(), authors).leak()
+}
+
+fn main() -> Result<(), String> {
+    // TODO: use matches
+    let (_matches, operation) = argument_man()
+        .map_err(|e| format!("Argument error: {}", e))?;
+    print!("{}", splash());
+    match operation {
+        Operation::Run | Operation::Watch => {
+            let dest = sanity_checker::check_surroundings()
+                .map_err(|e| format!("Sanity check failed: {}", e))?;
+            let conf = build_application_config(dest)
+                .map_err(|e| format!("Application configuration failed: {}", e))?;
+            let _ = run_application(conf, operation)
+                .map_err(|e| format!("Application failed: {}", e))?;
+        },
+        Operation::Init => println!("init mode"),
+        Operation::Invalid => {
+            eprintln!("Invalid mode");
+            exit(1);
+        },
     }
-    let conf = build_application_config(args.clone()).unwrap();
+    Ok(())
+}
+
+fn run_application(application_config: ApplicationConfig, op_mode: Operation) -> anyhow::Result<EndState> {
+    let level = application_config.get_logging_level()
+        .ok_or_else(|| anyhow!("No logging level"))?;
     tracing_subscriber::fmt()
-        .with_max_level(conf.logging_level.unwrap())
+        .with_max_level(level)
         .init();
     let span = info_span!("main");
-    let runtime = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(async_main(conf).instrument(span));
-    match runtime {
-        Ok(state) => match state {
-            EndState::Success => exit(0),
-            EndState::Failure => exit(1),
-        },
-        Err(e) => {
-            error!("Error in async runtime :: {}", e);
-            exit(1);
-        }
-    }
+    tokio::runtime::Runtime::new()?
+        .block_on(async_main(application_config, op_mode).instrument(span))
+        .map_err(|e| e)
 }
 
-async fn async_main(application_config: ApplicationConfig) -> anyhow::Result<EndState> {
+async fn async_main(application_config: ApplicationConfig, op_mode: Operation) -> anyhow::Result<EndState> {
     let fs = BasicUnixFileSystem::new(application_config.base_dir.as_str())?;
     let application_config = Arc::new(application_config);
     let file_system_operations = Arc::new(fs);
@@ -95,16 +109,22 @@ async fn async_main(application_config: ApplicationConfig) -> anyhow::Result<End
         return Ok(EndState::Failure);
     }
 
-    if application_config.application_mode {
-        info!("Application mode has been enabled, monitoring input signals.");
-        let _ = start_http_server(application_config.clone(), handle.clone(), services.clone())
-            .await
-            .map_err(|err| anyhow!(err))?;
-        Ok(EndState::Success)
-    } else {
-        info!("Single shot mode enabled waiting for engine 'done' flag");
-        let mut shutdown_handle = handle.clone();
-        shutdown_handle.wait_for_completion().await;
-        Ok(EndState::Success)
+    match op_mode {
+        Operation::Watch => {
+            info!("Application mode has been enabled, monitoring input signals.");
+            let _ = start_http_server(application_config.clone(), handle.clone(), services.clone())
+                .await
+                .map_err(|err| anyhow!(err))?;
+            Ok(EndState::Success)
+        },
+        Operation::Run => {
+            info!("Single shot mode enabled waiting for engine 'done' flag");
+            let mut shutdown_handle = handle.clone();
+            shutdown_handle.wait_for_completion().await;
+            Ok(EndState::Success)
+        },
+        _ => {
+            Err(anyhow::anyhow!("Invalid operation mode for main"))
+        }
     }
 }

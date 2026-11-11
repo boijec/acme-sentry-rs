@@ -17,6 +17,7 @@ dependencies = [
  "sentry-plugin-engine",
  "serde",
  "serde_yaml",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
