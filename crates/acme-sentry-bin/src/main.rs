@@ -1,28 +1,30 @@
-use crate::clap_config::{Operation, argument_man};
+use std::fmt::Debug;
+use crate::clap_config::{InitializationMode, Operation, argument_man};
 use crate::config_parsing::build_application_config;
 use anyhow::anyhow;
-use clap::{crate_authors, crate_version};
+use clap::{ArgMatches, crate_authors, crate_version};
 use sentry_api::server::start_http_server;
 use sentry_core::config::{ApplicationConfig, ConfigurationMap};
 use sentry_core::services::initialize_services;
 use sentry_db::pool::connect;
 use sentry_db::repo::initialize_repos;
-use sentry_io::fs::BasicUnixFileSystem;
+use sentry_io::fs::{BasicUnixFileSystem, FileSystemOperations, FileSystemOrigin};
 use sentry_job_engine::dependencies::JobDependencies;
 use sentry_job_engine::jobs::preflight_start_sequence;
 use sentry_job_engine::scheduling::Scheduler;
 use std::process::exit;
 use std::sync::Arc;
-use tracing::{Instrument, Span, error, info, info_span};
+use tracing::{error, info, info_span, warn, Instrument, Span, Level, Subscriber};
 
 mod config_parsing;
 mod clap_config;
-mod sanity_checker;
 
 enum EndState {
     Success,
     Failure,
 }
+
+const UNIVERSAL_BASE_DIR: &str = ".acmes";
 
 fn splash() -> String {
     format!(
@@ -41,25 +43,66 @@ fn about() -> &'static str {
 }
 
 fn main() -> Result<(), String> {
-    // TODO: use matches
-    let (_matches, operation) = argument_man()
+    let (matches, operation) = argument_man()
         .map_err(|e| format!("Argument error: {}", e))?;
+
     print!("{}", splash());
+
+    let level: &Level = matches.get_one("log-level")
+        .unwrap_or(&Level::INFO);
+    tracing_subscriber::fmt()
+        .with_max_level(*level)
+        .init();
+
     match operation {
         Operation::Run | Operation::Watch => {
-            let dest = sanity_checker::check_surroundings()
+            let dest = BasicUnixFileSystem::scan_for_home_folder(UNIVERSAL_BASE_DIR)
                 .map_err(|e| format!("Sanity check failed: {}", e))?;
             let conf = build_application_config(dest)
                 .map_err(|e| format!("Application configuration failed: {}", e))?;
             let _ = run_application(conf, operation)
                 .map_err(|e| format!("Application failed: {}", e))?;
         },
-        Operation::Init => println!("init mode"),
+        Operation::Init => {
+            let dest = BasicUnixFileSystem::scan_for_home_folder(UNIVERSAL_BASE_DIR);
+            if let Ok(dir) = dest {
+                warn!("Acme Sentry might already be initialized, check directory: {}", dir);
+                return Ok(());
+            }
+            init_application(matches)
+                .map_err(|e| format!("Application init failed: {}", e))?
+        },
         Operation::Invalid => {
             eprintln!("Invalid mode");
             exit(1);
         },
     }
+    Ok(())
+}
+
+fn init_application(matches: ArgMatches) -> Result<(), String> {
+    let (_, mat) = matches.subcommand().ok_or_else(|| "error parsing subcommand")?;
+    let mode: &InitializationMode = mat.get_one("init-mode")
+        .ok_or_else(|| "Initialization mode not specified".to_string())?;
+    let fs: BasicUnixFileSystem = match mode {
+        InitializationMode::Headless => {
+            BasicUnixFileSystem::initialize(UNIVERSAL_BASE_DIR, FileSystemOrigin::CurrentDirectory)
+                .map_err(|e| format!("Failed to initialize `./.` (current) directory setup: {}", e))?
+        },
+        InitializationMode::Server => {
+            BasicUnixFileSystem::initialize(UNIVERSAL_BASE_DIR, FileSystemOrigin::OptionsDirectory)
+                .map_err(|e| format!("Failed to initialize `/opt/.` (options) directory setup: {}", e))?
+        },
+        InitializationMode::User => {
+            BasicUnixFileSystem::initialize(UNIVERSAL_BASE_DIR, FileSystemOrigin::UserHomeDirectory)
+                .map_err(|e| format!("Failed to initialize `~/.` (user home) directory setup: {}", e))?
+        },
+    };
+    fs.touch_file("", "acme-sentry.db")
+        .map_err(|e| format!("Failed to touch `acme-sentry.db`: {}", e))?;
+    info!(
+        "Initialization of basic directories and database-file has been completed, you can now run in watch or one-shot mode"
+    );
     Ok(())
 }
 

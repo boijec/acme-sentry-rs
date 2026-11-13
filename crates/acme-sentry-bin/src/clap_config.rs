@@ -1,8 +1,9 @@
 use crate::about;
-use crate::config_parsing::log_level_parse;
-use clap::{Arg, ArgAction, ArgMatches, Command, crate_version};
-use thiserror::Error;
 use crate::clap_config::ConfigurationError::OperationError;
+use crate::config_parsing::log_level_parse;
+use clap::{Arg, ArgMatches, Command, crate_version, value_parser};
+use serde::Serialize;
+use thiserror::Error;
 
 #[non_exhaustive]
 pub enum Operation {
@@ -32,6 +33,17 @@ impl Into<String> for Operation {
     }
 }
 
+#[derive(
+    clap::ValueEnum, Clone, Default, Debug, Serialize
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum InitializationMode {
+    #[default]
+    Headless,
+    Server,
+    User
+}
+
 #[derive(Error, Debug)]
 pub enum ConfigurationError {
     #[error("Clap error :: {0}")]
@@ -54,9 +66,9 @@ pub(crate) fn argument_man() -> Result<(ArgMatches, Operation), ConfigurationErr
                 .long("level")
                 .help("Set log level"),
         )
-        .subcommand(init())
-        .subcommand(watch())
-        .subcommand(run())
+        .subcommand(init().args_conflicts_with_subcommands(true))
+        .subcommand(watch().args_conflicts_with_subcommands(true))
+        .subcommand(run().args_conflicts_with_subcommands(true))
         .get_matches();
     let operation: Operation = matches
         .subcommand_name()
@@ -67,13 +79,13 @@ pub(crate) fn argument_man() -> Result<(ArgMatches, Operation), ConfigurationErr
 
 fn init() -> Command {
     Command::new("init")
-        .about("Initialize all basic directories for acme-sentry in: '~/.acmes'")
+        .about("Initialize all basic directories for acme-sentry")
         .arg(
-            Arg::new("dry-run")
-                .short('d')
-                .long("dry-run")
-                .action(ArgAction::SetTrue)
-                .help("Run initialization sequence but don't create directories or files")
+            Arg::new("init-mode")
+                .long("mode")
+                .num_args(1)
+                .value_parser(value_parser!(InitializationMode))
+                .help("Set the initialization mode")
         )
 }
 fn watch() -> Command {
