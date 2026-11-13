@@ -2147,6 +2147,7 @@ dependencies = [
  "async-trait",
  "serde",
  "sqlx",
+ "tempfile",
  "thiserror",
  "tokio",
 ]

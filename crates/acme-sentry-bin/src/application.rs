@@ -4,7 +4,7 @@ use tracing::{info_span, Span, info, error, Instrument};
 use sentry_api::server::start_http_server;
 use sentry_core::config::{ApplicationConfig, ConfigurationMap};
 use sentry_core::services::initialize_services;
-use sentry_db::pool::connect;
+use sentry_db::pool::{connect, DB_FILE_NAME};
 use sentry_db::repo::initialize_repos;
 use sentry_io::fs::BasicUnixFileSystem;
 use sentry_job_engine::dependencies::JobDependencies;
@@ -29,7 +29,7 @@ pub(crate) async fn async_main(application_config: ApplicationConfig, op_mode: O
     let fs = BasicUnixFileSystem::new(application_config.base_dir.as_str())?;
     let application_config = Arc::new(application_config);
     let file_system_operations = Arc::new(fs);
-    let db_location = format!("{}/acme-sentry.db", application_config.base_dir.clone());
+    let db_location = format!("{}/{}", application_config.base_dir.clone(), DB_FILE_NAME);
     let pool = connect(&db_location).await?;
     let repos = initialize_repos(&pool);
     let services = Arc::new(initialize_services(

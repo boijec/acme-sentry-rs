@@ -1,5 +1,6 @@
 use clap::ArgMatches;
 use tracing::info;
+use sentry_db::pool::DB_FILE_NAME;
 use sentry_io::fs::{BasicUnixFileSystem, FileSystemOperations, FileSystemOrigin};
 use crate::clap_config::InitializationMode;
 use crate::UNIVERSAL_BASE_DIR;
@@ -22,8 +23,8 @@ pub(crate) fn init_application(matches: ArgMatches) -> Result<(), String> {
                 .map_err(|e| format!("Failed to initialize `~/.` (user home) directory setup: {}", e))?
         },
     };
-    fs.touch_file("", "acme-sentry.db")
-        .map_err(|e| format!("Failed to touch `acme-sentry.db`: {}", e))?;
+    fs.touch_file("", DB_FILE_NAME)
+        .map_err(|e| format!("Failed to touch `{}`: {}", DB_FILE_NAME, e))?;
     info!(
         "Initialization of basic directories and database-file has been completed, you can now run in watch or one-shot mode"
     );
