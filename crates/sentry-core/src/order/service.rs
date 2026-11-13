@@ -1,6 +1,6 @@
 use crate::challenge::model::{ChallengeMark, ServiceOrderChallenge};
 use crate::challenge::service::ChallengeService;
-use crate::config::{ApplicationConfig, ConfigurationMap};
+use crate::config::ApplicationConfig;
 use crate::directory::service::DirectoryService;
 use crate::helpers::resources::get_shared_resources;
 use crate::order::error::OrderServiceError;
@@ -155,11 +155,8 @@ impl OrderService {
         };
 
         let _ = run_plugin(
-            self.configuration.get_acme_challenge_plugin(),
-            DiscoveryType::as_ds_type(self.configuration.get_discovery_type().as_str())
-                .ok_or_else(|| {
-                    OrderServiceError::InternalError("Failed to get discovery type".into())
-                })?,
+            format!("{}/plugins", self.configuration.base_dir),
+            DiscoveryType::Directory,
             RunMode::Set,
             &run_config,
         )

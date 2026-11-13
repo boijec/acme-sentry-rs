@@ -17,6 +17,7 @@ dependencies = [
  "sentry-plugin-engine",
  "serde",
  "serde_yaml",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2146,6 +2147,7 @@ dependencies = [
  "async-trait",
  "serde",
  "sqlx",
+ "tempfile",
  "thiserror",
  "tokio",
 ]
