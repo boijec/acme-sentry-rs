@@ -15,7 +15,6 @@ pub async fn start_http_server(
     handle: SchedulerHandle<'static>,
     services: Arc<Services>,
 ) -> Result<(), ServerError> {
-    // TODO: add to yaml config / args params
     let bind_addr = "0.0.0.0:8080";
     let scheduler_data = web::Data::new(handle.clone());
     let config = web::Data::new(application_config.clone());

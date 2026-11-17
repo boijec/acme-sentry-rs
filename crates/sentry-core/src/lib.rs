@@ -4,6 +4,8 @@ pub mod directory;
 pub mod dns;
 pub mod error;
 pub mod helpers;
+pub mod initialization;
 pub mod order;
+pub mod plugin;
 pub mod services;
 pub mod user;

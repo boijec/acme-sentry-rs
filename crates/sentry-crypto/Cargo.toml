@@ -12,4 +12,3 @@ openssl.workspace = true
 hex.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-serde_json.workspace = true

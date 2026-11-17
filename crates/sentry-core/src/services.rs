@@ -3,9 +3,12 @@ use crate::config::ApplicationConfig;
 use crate::directory::service::DirectoryService;
 use crate::dns::service::DnsService;
 use crate::order::service::OrderService;
+use crate::plugin::service::PluginService;
+use crate::plugin::tooling::PluginTool;
 use crate::user::service::UserService;
 use sentry_db::repo::DatabaseRepositories;
 use sentry_io::fs::FileSystemOperations;
+use sentry_plugin_engine::engine::PluginEngine;
 use std::sync::Arc;
 
 pub struct Services {
@@ -34,7 +37,14 @@ pub fn initialize_services(
     configuration: Arc<ApplicationConfig>,
     database_repositories: DatabaseRepositories,
     file_system_operations: Arc<dyn FileSystemOperations + Send + Sync>,
+    plugin_tool: Arc<PluginTool>,
+    plugin_engine: Arc<PluginEngine>,
 ) -> Services {
+    let plugin_service = Arc::new(PluginService::new(
+        configuration.clone(),
+        plugin_tool.clone(),
+        plugin_engine.clone(),
+    ));
     let directory_service = Arc::new(DirectoryService::new(configuration.clone()));
     let dns_service = Arc::new(DnsService::new(configuration.clone()));
     let challenge_service = Arc::new(ChallengeService::new(
@@ -51,10 +61,10 @@ pub fn initialize_services(
         directory_service.clone(),
     ));
     let order_service = Arc::new(OrderService::new(
-        configuration.clone(),
         database_repositories.order_repo(),
         directory_service.clone(),
         challenge_service.clone(),
+        plugin_service.clone(),
     ));
     Services {
         user_service,

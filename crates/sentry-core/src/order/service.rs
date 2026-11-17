@@ -1,40 +1,38 @@
 use crate::challenge::model::{ChallengeMark, ServiceOrderChallenge};
 use crate::challenge::service::ChallengeService;
-use crate::config::{ApplicationConfig, ConfigurationMap};
 use crate::directory::service::DirectoryService;
 use crate::helpers::resources::get_shared_resources;
 use crate::order::error::OrderServiceError;
 use crate::order::model::{DownloadStatus, ServiceUserOrder};
+use crate::plugin::service::PluginService;
 use crate::user::model::ServiceUser;
 use sentry_db::repo::order_repo::{Order, OrderRepo};
 use sentry_jose::keys::PrivateKey;
-use sentry_plugin_engine::loader::{SetConfig, run_plugin};
-use sentry_plugin_engine::run_mode::{DiscoveryType, RunMode};
 use sentry_rfc8555::certificate::CertificateOperations;
 use sentry_rfc8555::order::OrderOperations;
 use std::sync::Arc;
 use tracing::{info, instrument};
 
 pub struct OrderService {
-    configuration: Arc<ApplicationConfig>,
     order_repo: Arc<dyn OrderRepo + Send + Sync>,
 
     directory_service: Arc<DirectoryService>,
     challenge_service: Arc<ChallengeService>,
+    plugin_service: Arc<PluginService>,
 }
 
 impl OrderService {
     pub fn new(
-        configuration: Arc<ApplicationConfig>,
         order_repo: Arc<dyn OrderRepo + Send + Sync>,
         directory_service: Arc<DirectoryService>,
         challenge_service: Arc<ChallengeService>,
+        plugin_service: Arc<PluginService>,
     ) -> Self {
         OrderService {
-            configuration,
             order_repo,
             directory_service,
             challenge_service,
+            plugin_service,
         }
     }
 
@@ -144,29 +142,13 @@ impl OrderService {
             .challenge_service
             .initiate_challenge(user, order)
             .await?;
-        let challenge_info = order
-            .challenge_info
-            .ok_or_else(|| OrderServiceError::InternalError("ChallengeInfo not found".into()))?;
 
-        let run_config = SetConfig {
-            acme_token: challenge_info.txt_record_value.clone(),
-            domain: order.domain.clone(),
-            record_name: challenge_info.dns_record_name.clone(),
-        };
-
-        let _ = run_plugin(
-            self.configuration.get_acme_challenge_plugin(),
-            DiscoveryType::as_ds_type(self.configuration.get_discovery_type().as_str())
-                .ok_or_else(|| {
-                    OrderServiceError::InternalError("Failed to get discovery type".into())
-                })?,
-            RunMode::Set,
-            &run_config,
-        )
-        .map_err(|e| OrderServiceError::InternalError(e.to_string()))?;
-
+        self.plugin_service
+            .set_acme_challenge(order)
+            .map_err(|e| OrderServiceError::InternalError(e.to_string()))?;
         Ok(())
     }
+
     #[instrument(skip(self, order, mark))]
     pub async fn mark(
         &self,
