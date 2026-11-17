@@ -1,21 +1,19 @@
-use crate::application::run_application;
 use crate::clap_config::{Operation, argument_man};
-use crate::config_parsing::build_application_config;
 use crate::initialization::init_application;
+use crate::toml_config::scan_and_build_application_config;
+use anyhow::anyhow;
 use clap::{crate_authors, crate_version};
+use sentry_core::config::ConfigurationMap;
 use sentry_io::fs::BasicUnixFileSystem;
-use std::process::exit;
+use std::process::ExitCode;
+use std::sync::Arc;
 use tracing::{Level, warn};
 
-mod config_parsing;
+mod application;
 mod clap_config;
 mod initialization;
-mod application;
-
-enum EndState {
-    Success,
-    Failure,
-}
+mod plugins;
+mod toml_config;
 
 const UNIVERSAL_BASE_DIR: &str = ".acmes";
 
@@ -31,44 +29,66 @@ fn version() -> &'static str {
 }
 
 fn about() -> &'static str {
-    let authors = format!("By: {}\n", crate_authors!());
+    let authors = format!("Created by:\n\t{}\n", crate_authors!());
     format!("{}{}{}", splash(), version(), authors).leak()
 }
 
-fn main() -> Result<(), String> {
-    let (matches, operation) = argument_man()
-        .map_err(|e| format!("Argument error: {}", e))?;
+fn main() -> anyhow::Result<ExitCode> {
+    let (mut matches, operation) =
+        argument_man().map_err(|e| anyhow!("Argument error :: {}", e))?;
 
-    print!("{}", splash());
+    print!("{}\n", splash());
 
-    let level: &Level = matches.get_one("log-level")
-        .unwrap_or(&Level::INFO);
+    let temp: Option<Level> = matches.remove_one("log-level");
+    let level: Level = if let Some(l) = temp { l } else { Level::INFO };
+
+    if operation == Operation::Init {
+        tracing_subscriber::fmt().with_max_level(level).init();
+        init_application(&mut matches).map_err(|e| anyhow!("Application init failed :: {}", e))?;
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let base_dir_path =
+        BasicUnixFileSystem::scan_for_home_folder(UNIVERSAL_BASE_DIR).map_err(|e| {
+            anyhow!(
+                "Acme Sentry could not start :: error during home directory scan :: {}",
+                e
+            )
+        })?;
+    let fs = BasicUnixFileSystem::start(base_dir_path)?;
+    let mut conf = scan_and_build_application_config(&fs)
+        .map_err(|e| anyhow!("Error while reading configuration :: {}", e))?;
+    if !level.eq(&conf.get_logging_level()) {
+        conf = conf.with_logging_level(level);
+    }
+    let file_system = Arc::new(fs);
     tracing_subscriber::fmt()
-        .with_max_level(*level)
+        .with_max_level(conf.logging_level)
         .init();
 
+    let application_configuration = Arc::new(conf);
     match operation {
-        Operation::Run | Operation::Watch => {
-            let dest = BasicUnixFileSystem::scan_for_home_folder(UNIVERSAL_BASE_DIR)
-                .map_err(|e| format!("Sanity check failed: {}", e))?;
-            let conf = build_application_config(dest)
-                .map_err(|e| format!("Application configuration failed: {}", e))?;
-            let _ = run_application(conf, operation)
-                .map_err(|e| format!("Application failed: {}", e))?;
-        },
-        Operation::Init => {
-            let dest = BasicUnixFileSystem::scan_for_home_folder(UNIVERSAL_BASE_DIR);
-            if let Ok(dir) = dest {
-                warn!("Acme Sentry might already be initialized, check directory: {}", dir);
-                return Ok(());
+        Operation::OneShot | Operation::Watch => {
+            let ready = plugins::check_plugin_ready(file_system.clone())
+                .map_err(|e| anyhow!("Error while checking plugin ready: {}", e))?;
+            if ready {
+                let state = application::run(application_configuration, file_system, operation)
+                    .map_err(|e| anyhow!("Critical Failure :: {}", e))?;
+                return Ok(state);
+            } else {
+                warn!("No acme plugins installed - quitting..");
             }
-            init_application(matches)
-                .map_err(|e| format!("Application init failed: {}", e))?
-        },
+        }
+        Operation::Plugin => {
+            plugins::list_or_install_plugin(&mut matches, file_system, application_configuration)?;
+        }
         Operation::Invalid => {
             eprintln!("Invalid mode");
-            exit(1);
-        },
+            return Ok(ExitCode::FAILURE);
+        }
+        _ => {
+            eprintln!("Operation not allowed here!");
+        }
     }
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }

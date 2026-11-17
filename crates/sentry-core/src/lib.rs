@@ -7,3 +7,5 @@ pub mod helpers;
 pub mod order;
 pub mod services;
 pub mod user;
+pub mod initialization;
+pub mod plugin;

@@ -1,32 +1,36 @@
+use crate::{UNIVERSAL_BASE_DIR, toml_config};
 use clap::ArgMatches;
-use tracing::info;
-use sentry_db::pool::DB_FILE_NAME;
-use sentry_io::fs::{BasicUnixFileSystem, FileSystemOperations, FileSystemOrigin};
-use crate::clap_config::InitializationMode;
-use crate::UNIVERSAL_BASE_DIR;
+use sentry_core::initialization::{InitializationMode, create_basic_directories};
 
-pub(crate) fn init_application(matches: ArgMatches) -> Result<(), String> {
-    let (_, mat) = matches.subcommand().ok_or_else(|| "error parsing subcommand")?;
-    let mode: &InitializationMode = mat.get_one("init-mode")
-        .ok_or_else(|| "Initialization mode not specified".to_string())?;
-    let fs: BasicUnixFileSystem = match mode {
-        InitializationMode::Headless => {
-            BasicUnixFileSystem::initialize(UNIVERSAL_BASE_DIR, FileSystemOrigin::CurrentDirectory)
-                .map_err(|e| format!("Failed to initialize `./.` (current) directory setup: {}", e))?
-        },
-        InitializationMode::Server => {
-            BasicUnixFileSystem::initialize(UNIVERSAL_BASE_DIR, FileSystemOrigin::OptionsDirectory)
-                .map_err(|e| format!("Failed to initialize `/opt/.` (options) directory setup: {}", e))?
-        },
-        InitializationMode::User => {
-            BasicUnixFileSystem::initialize(UNIVERSAL_BASE_DIR, FileSystemOrigin::UserHomeDirectory)
-                .map_err(|e| format!("Failed to initialize `~/.` (user home) directory setup: {}", e))?
-        },
-    };
-    fs.touch_file("", DB_FILE_NAME)
-        .map_err(|e| format!("Failed to touch `{}`: {}", DB_FILE_NAME, e))?;
-    info!(
-        "Initialization of basic directories and database-file has been completed, you can now run in watch or one-shot mode"
+pub(crate) fn init_application(matches: &mut ArgMatches) -> Result<(), String> {
+    let (mode, base_url, key_type, email) = extract_argument_matches(matches)?;
+    let conf_content = toml_config::build_toml_config(base_url, key_type, email)
+        .map_err(|e| format!("failed to build toml config: {}", e))?;
+    let _ = create_basic_directories(UNIVERSAL_BASE_DIR, mode, conf_content)?;
+    println!(
+        "Initialization of basic directories and database-file has been completed, you can now run in watch or one-shot mode\n"
     );
     Ok(())
+}
+
+fn extract_argument_matches(
+    matches: &mut ArgMatches,
+) -> Result<(InitializationMode, String, String, String), String> {
+    let (_, mut mat) = matches
+        .remove_subcommand()
+        .ok_or_else(|| "error parsing subcommand")?;
+    let mode_str: String = mat
+        .remove_one("init-mode")
+        .ok_or_else(|| "Initialization mode not specified".to_string())?;
+    let mode: InitializationMode = InitializationMode::from(mode_str);
+    let base_url: String = mat
+        .remove_one("base-url")
+        .ok_or_else(|| "base-url not specified".to_string())?;
+    let key_type: String = mat
+        .remove_one("key-type")
+        .ok_or_else(|| "key-type not specified".to_string())?;
+    let email: String = mat
+        .remove_one("email")
+        .ok_or_else(|| "email not specified".to_string())?;
+    Ok((mode, base_url, key_type, email))
 }

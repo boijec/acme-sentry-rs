@@ -1,7 +1,8 @@
-use std::{env, fs};
-use std::fs::File;
+use std::fs::{File, ReadDir, read_dir};
 use std::io;
+use std::iter::Flatten;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 use thiserror::Error;
 use tracing::{debug, instrument};
 
@@ -20,7 +21,7 @@ pub enum FileSystemError {
     UnableToEnsureSubDir(io::Error, String),
     #[error("Unable to read from file :: {1}")]
     UnableToReadFile(io::Error, String),
-    #[error("Unable to write to file :: {1}")]
+    #[error("Unable to write to file :: {1} -> {0}")]
     UnableToWriteFile(io::Error, String),
     #[error("Unable to find directory :: {1}")]
     UnableToFindDirectory(io::Error, String),
@@ -31,8 +32,11 @@ pub enum FileSystemError {
 }
 
 pub trait FileSystemOperations {
+    fn resolve_path(&self, path: &str) -> FileResult<PathBuf>;
+    fn get_base_dir(&self) -> PathBuf;
     fn sub_dir(&self, name: &str) -> PathBuf;
     fn ensure_sub_dir(&self, name: &str) -> FileResult<PathBuf>;
+    fn read_sub_directory(&self, sub_dir: &str) -> FileResult<Flatten<ReadDir>>;
     fn file_exists_adaptive(&self, dir: PathBuf, file_name: &str) -> bool;
     fn file_exists(&self, dir: PathBuf, file_name: &str) -> bool;
     fn touch_file(
@@ -40,6 +44,7 @@ pub trait FileSystemOperations {
         sub_dir: &str,
         filename: &str,
     ) -> FileResult<()>;
+    fn copy(&self, from: PathBuf, to: &str) -> FileResult<()>;
     fn write_to_file(
         &self,
         sub_dir: &str,
@@ -47,6 +52,7 @@ pub trait FileSystemOperations {
         data: &[u8],
     ) -> FileResult<PathBuf>;
     fn read_from_file(&self, sub_dir: &str, filename: &str) -> FileResult<Vec<u8>>;
+    fn read_from_file_to_string(&self, sub_dir: &str, filename: &str) -> FileResult<String>;
 }
 
 pub enum FileSystemOrigin {
@@ -58,7 +64,7 @@ pub enum FileSystemOrigin {
 impl BasicUnixFileSystem {
     const OPT_BASE_DIR: &str = "/opt";
 
-    pub fn new<P: AsRef<Path>>(base_dir: P) -> FileResult<Self> {
+    pub fn start<P: AsRef<Path>>(base_dir: P) -> FileResult<Self> {
         let base_dir = base_dir.as_ref();
         if !base_dir.exists() {
             return Err(FileSystemError::UnableToEstablishHomeFolder);
@@ -69,8 +75,10 @@ impl BasicUnixFileSystem {
     }
     pub fn initialize<P: AsRef<Path>>(base_dir: P, origin_type: FileSystemOrigin) -> FileResult<Self> {
         let base = match origin_type {
-            FileSystemOrigin::CurrentDirectory => env::current_dir().map_err(|err| FileSystemError::UnknownFileSystemError(err))?,
-            FileSystemOrigin::UserHomeDirectory => env::home_dir().ok_or_else(|| FileSystemError::UnableToLocateDirectoryEnvironment("user home directory not found".into()))?,
+            FileSystemOrigin::CurrentDirectory => env::current_dir()
+                .map_err(|err| FileSystemError::UnknownFileSystemError(err))?,
+            FileSystemOrigin::UserHomeDirectory => env::home_dir()
+                .ok_or_else(|| FileSystemError::UnableToLocateDirectoryEnvironment("user home directory not found".into()))?,
             FileSystemOrigin::OptionsDirectory => Self::OPT_BASE_DIR.into(),
         };
         let origin = base.join(base_dir.as_ref());
@@ -115,6 +123,16 @@ impl BasicUnixFileSystem {
 }
 
 impl FileSystemOperations for BasicUnixFileSystem {
+    fn resolve_path(&self, path: &str) -> FileResult<PathBuf> {
+        let source = PathBuf::from(path);
+        let canon = fs::canonicalize(&source)
+            .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
+        debug!("Path resolved to: {:?}", canon);
+        Ok(canon)
+    }
+    fn get_base_dir(&self) -> PathBuf {
+        self.base_dir.clone()
+    }
     fn sub_dir(&self, name: &str) -> PathBuf {
         self.base_dir.join(name)
     }
@@ -125,6 +143,12 @@ impl FileSystemOperations for BasicUnixFileSystem {
                 .map_err(|e| FileSystemError::UnableToEnsureSubDir(e, name.to_string()))?;
         }
         Ok(target)
+    }
+    fn read_sub_directory(&self, sub_dir: &str) -> FileResult<Flatten<ReadDir>> {
+        let t = self.base_dir.join(sub_dir);
+        let s = read_dir(t)
+            .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
+        Ok(s.flatten())
     }
     fn file_exists_adaptive(&self, dir: PathBuf, file_name: &str) -> bool {
         dir.join(file_name).exists()
@@ -142,6 +166,13 @@ impl FileSystemOperations for BasicUnixFileSystem {
         let file_path = dir.join(filename);
         debug!("Touching file: {}", file_path.display());
         let _ = File::create_new(file_path)
+            .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
+        Ok(())
+    }
+    #[instrument(skip(self, from, to))]
+    fn copy(&self, from: PathBuf, to: &str) -> FileResult<()> {
+        let base = self.base_dir.join(to);
+        fs::copy(&from, &base)
             .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
         Ok(())
     }
@@ -167,5 +198,14 @@ impl FileSystemOperations for BasicUnixFileSystem {
         let vec = fs::read(&file_path)
             .map_err(|e| FileSystemError::UnableToReadFile(e, filename.to_string()))?;
         Ok(vec)
+    }
+    #[instrument(skip(self, sub_dir, filename))]
+    fn read_from_file_to_string(&self, sub_dir: &str, filename: &str) -> FileResult<String> {
+        let dir = self.base_dir.join(self.sub_dir(sub_dir));
+        let file_path = dir.join(filename);
+        debug!("Reading file to string: {}", file_path.display());
+        let s = fs::read_to_string(&file_path)
+            .map_err(|e| FileSystemError::UnableToReadFile(e, filename.to_string()))?;
+        Ok(s)
     }
 }

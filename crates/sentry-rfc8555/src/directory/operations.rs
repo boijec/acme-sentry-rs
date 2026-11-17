@@ -15,7 +15,7 @@ impl DirectoryOperations {
         url_string: &str,
         accept_invalid_certs: bool,
     ) -> Result<Self, DirectoryOperationsError> {
-        let parsed_directory_base = format!("{}/dir", url_string);
+        let parsed_directory_base = format!("{}", url_string);
         let url = Url::parse(parsed_directory_base.as_str()).map_err(|e| {
             DirectoryOperationsError::UrlParsingError(e.to_string(), url_string.to_string())
         })?;

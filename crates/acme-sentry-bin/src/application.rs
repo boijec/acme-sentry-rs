@@ -1,41 +1,47 @@
-use std::sync::Arc;
+use crate::clap_config::Operation;
 use anyhow::anyhow;
-use tracing::{info_span, Span, info, error, Instrument};
 use sentry_api::server::start_http_server;
 use sentry_core::config::{ApplicationConfig, ConfigurationMap};
 use sentry_core::services::initialize_services;
-use sentry_db::pool::{connect, DB_FILE_NAME};
+use sentry_db::pool::{DB_FILE_NAME, connect};
 use sentry_db::repo::initialize_repos;
-use sentry_io::fs::BasicUnixFileSystem;
+use sentry_io::fs::FileSystemOperations;
 use sentry_job_engine::dependencies::JobDependencies;
 use sentry_job_engine::jobs::preflight_start_sequence;
 use sentry_job_engine::scheduling::Scheduler;
-use crate::clap_config::Operation;
-use crate::EndState;
+use std::process::ExitCode;
+use std::sync::Arc;
+use tracing::{Instrument, Span, error, info, info_span};
+use sentry_core::plugin::tooling::PluginTool;
+use sentry_plugin_engine::engine::PluginEngine;
 
-pub(crate) fn run_application(application_config: ApplicationConfig, op_mode: Operation) -> anyhow::Result<EndState> {
-    let level = application_config.get_logging_level()
-        .ok_or_else(|| anyhow!("No logging level"))?;
-    tracing_subscriber::fmt()
-        .with_max_level(level)
-        .init();
+pub(crate) fn run(
+    application_config: Arc<ApplicationConfig>,
+    fs: Arc<dyn FileSystemOperations + Send + Sync>,
+    op_mode: Operation,
+) -> anyhow::Result<ExitCode> {
     let span = info_span!("main");
     tokio::runtime::Runtime::new()?
-        .block_on(async_main(application_config, op_mode).instrument(span))
+        .block_on(tree_start(application_config, fs, op_mode).instrument(span))
         .map_err(|e| e)
 }
 
-pub(crate) async fn async_main(application_config: ApplicationConfig, op_mode: Operation) -> anyhow::Result<EndState> {
-    let fs = BasicUnixFileSystem::new(application_config.base_dir.as_str())?;
-    let application_config = Arc::new(application_config);
-    let file_system_operations = Arc::new(fs);
-    let db_location = format!("{}/{}", application_config.base_dir.clone(), DB_FILE_NAME);
+async fn tree_start(
+    application_config: Arc<ApplicationConfig>,
+    file_system_operations: Arc<dyn FileSystemOperations + Send + Sync>,
+    op_mode: Operation,
+) -> anyhow::Result<ExitCode> {
+    let db_location = format!("{}/{}", application_config.get_base_dir(), DB_FILE_NAME);
     let pool = connect(&db_location).await?;
+    let plugin_tool = Arc::new(PluginTool::new(file_system_operations.clone()));
+    let plugin_engine = Arc::new(PluginEngine::new());
     let repos = initialize_repos(&pool);
     let services = Arc::new(initialize_services(
         application_config.clone(),
         repos,
         file_system_operations.clone(),
+        plugin_tool.clone(),
+        plugin_engine.clone(),
     ));
 
     let (mut scheduler, handle) = Scheduler::new(32);
@@ -56,7 +62,7 @@ pub(crate) async fn async_main(application_config: ApplicationConfig, op_mode: O
         error!("Preflight steps raised error :: {}", error.to_string());
         handle.shutdown().await;
         preflight_handler.wait_for_shutdown().await;
-        return Ok(EndState::Failure);
+        return Ok(ExitCode::FAILURE);
     }
 
     match op_mode {
@@ -65,16 +71,14 @@ pub(crate) async fn async_main(application_config: ApplicationConfig, op_mode: O
             let _ = start_http_server(application_config.clone(), handle.clone(), services.clone())
                 .await
                 .map_err(|err| anyhow!(err))?;
-            Ok(EndState::Success)
-        },
-        Operation::Run => {
+            Ok(ExitCode::SUCCESS)
+        }
+        Operation::OneShot => {
             info!("Single shot mode enabled waiting for engine 'done' flag");
             let mut shutdown_handle = handle.clone();
             shutdown_handle.wait_for_completion().await;
-            Ok(EndState::Success)
-        },
-        _ => {
-            Err(anyhow::anyhow!("Invalid operation mode for main"))
+            Ok(ExitCode::SUCCESS)
         }
+        _ => Err(anyhow::anyhow!("Invalid operation mode for main")),
     }
 }
