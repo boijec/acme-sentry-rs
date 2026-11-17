@@ -16,9 +16,9 @@ pub async fn connect(connection_path: &String) -> Result<Pool<Sqlite>, DatabaseE
 
 #[cfg(test)]
 mod tests {
+    use crate::pool::connect;
     use std::fs::File;
     use tempfile::tempdir;
-    use crate::pool::connect;
 
     #[tokio::test]
     async fn test_initialization() {

@@ -3,13 +3,13 @@ use crate::config::ApplicationConfig;
 use crate::directory::service::DirectoryService;
 use crate::dns::service::DnsService;
 use crate::order::service::OrderService;
+use crate::plugin::service::PluginService;
+use crate::plugin::tooling::PluginTool;
 use crate::user::service::UserService;
 use sentry_db::repo::DatabaseRepositories;
 use sentry_io::fs::FileSystemOperations;
-use std::sync::Arc;
 use sentry_plugin_engine::engine::PluginEngine;
-use crate::plugin::service::PluginService;
-use crate::plugin::tooling::PluginTool;
+use std::sync::Arc;
 
 pub struct Services {
     user_service: Arc<UserService>,

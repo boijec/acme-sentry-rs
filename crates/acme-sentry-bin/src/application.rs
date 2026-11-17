@@ -2,6 +2,7 @@ use crate::clap_config::Operation;
 use anyhow::anyhow;
 use sentry_api::server::start_http_server;
 use sentry_core::config::{ApplicationConfig, ConfigurationMap};
+use sentry_core::plugin::tooling::PluginTool;
 use sentry_core::services::initialize_services;
 use sentry_db::pool::{DB_FILE_NAME, connect};
 use sentry_db::repo::initialize_repos;
@@ -9,11 +10,10 @@ use sentry_io::fs::FileSystemOperations;
 use sentry_job_engine::dependencies::JobDependencies;
 use sentry_job_engine::jobs::preflight_start_sequence;
 use sentry_job_engine::scheduling::Scheduler;
+use sentry_plugin_engine::engine::PluginEngine;
 use std::process::ExitCode;
 use std::sync::Arc;
 use tracing::{Instrument, Span, error, info, info_span};
-use sentry_core::plugin::tooling::PluginTool;
-use sentry_plugin_engine::engine::PluginEngine;
 
 pub(crate) fn run(
     application_config: Arc<ApplicationConfig>,

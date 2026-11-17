@@ -1,11 +1,11 @@
-use std::sync::Arc;
 use anyhow::anyhow;
+use sentry_common::uuid::InternalIdTooling;
 use sentry_core::config::{ApplicationConfig, ConfigBuilder};
 use sentry_core::initialization::CONFIG_FILE_NAME;
 use sentry_io::fs::FileSystemOperations;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tracing::Level;
-use sentry_common::uuid::InternalIdTooling;
 
 #[derive(Serialize, Deserialize)]
 pub struct ConfigFileFormat {
@@ -42,16 +42,11 @@ mod level_serde {
     use std::str::FromStr;
     use tracing::Level;
 
-    pub fn serialize<S: Serializer>(
-        level: &Level,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(level: &Level, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_str(&level.to_string())
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Level, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Level, D::Error> {
         let s = String::deserialize(deserializer)?;
         Ok(Level::from_str(&s).unwrap_or(Level::INFO))
     }
@@ -68,11 +63,15 @@ pub(crate) fn log_level_parse(s: &str) -> Result<Level, String> {
     }
 }
 
-
-pub(crate) fn scan_and_build_application_config(fs: &impl FileSystemOperations) -> anyhow::Result<ApplicationConfig> {
-    let content = fs.read_from_file_to_string("", CONFIG_FILE_NAME)
+pub(crate) fn scan_and_build_application_config(
+    fs: &impl FileSystemOperations,
+) -> anyhow::Result<ApplicationConfig> {
+    let content = fs
+        .read_from_file_to_string("", CONFIG_FILE_NAME)
         .map_err(|e| anyhow!("Error while reading configuration :: {}", e))?;
-    let base_dir = fs.get_base_dir().into_string()
+    let base_dir = fs
+        .get_base_dir()
+        .into_string()
         .map_err(|e| anyhow!("Error while parsing base-dir string :: {:?}", e))?;
     let toml: ConfigFileFormat = toml::from_str(&content)?;
     Ok(ApplicationConfig::builder()
@@ -86,14 +85,21 @@ pub(crate) fn scan_and_build_application_config(fs: &impl FileSystemOperations) 
         .build())
 }
 
-pub(crate) fn read_current_toml_config(fs: Arc<dyn FileSystemOperations>) -> anyhow::Result<ConfigFileFormat> {
-    let content = fs.read_from_file_to_string("", CONFIG_FILE_NAME)
+pub(crate) fn read_current_toml_config(
+    fs: Arc<dyn FileSystemOperations>,
+) -> anyhow::Result<ConfigFileFormat> {
+    let content = fs
+        .read_from_file_to_string("", CONFIG_FILE_NAME)
         .map_err(|e| anyhow!("Error while reading configuration :: {}", e))?;
     let toml: ConfigFileFormat = toml::from_str(&content)?;
     Ok(toml)
 }
 
-pub(crate) fn build_toml_config(base_url: String, key_type: String, email: String) -> anyhow::Result<String> {
+pub(crate) fn build_toml_config(
+    base_url: String,
+    key_type: String,
+    email: String,
+) -> anyhow::Result<String> {
     let conf = ConfigFileFormat {
         logging_level: Level::INFO,
         acme_ca_base_url: base_url,
@@ -102,15 +108,19 @@ pub(crate) fn build_toml_config(base_url: String, key_type: String, email: Strin
             id: InternalIdTooling::new_compact_id(),
             key_type,
             email,
-        }
+        },
     };
     let conf_content = toml::to_string(&conf)
         .map_err(|e| anyhow!("Failed to serialize `{}`: {}", CONFIG_FILE_NAME, e))?;
     Ok(conf_content)
 }
 
-pub(crate) fn save_serialized_config(config: ConfigFileFormat, fs: Arc<dyn FileSystemOperations>) -> anyhow::Result<()> {
-    let content = toml::to_string(&config).map_err(|e| anyhow!("Failed to serialize `{}`: {}", CONFIG_FILE_NAME, e))?;
+pub(crate) fn save_serialized_config(
+    config: ConfigFileFormat,
+    fs: Arc<dyn FileSystemOperations>,
+) -> anyhow::Result<()> {
+    let content = toml::to_string(&config)
+        .map_err(|e| anyhow!("Failed to serialize `{}`: {}", CONFIG_FILE_NAME, e))?;
     fs.write_to_file("", CONFIG_FILE_NAME, content.as_bytes())
         .map_err(|e| anyhow!("Failed to save `{}`: {}", CONFIG_FILE_NAME, e))?;
     Ok(())

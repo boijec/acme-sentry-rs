@@ -26,13 +26,10 @@ impl PluginService {
     }
 
     #[instrument(skip(self, order))]
-    pub fn set_acme_challenge(
-        &self,
-        order: ServiceUserOrder,
-    ) -> Result<(), PluginServiceError> {
-        let challenge_info = order
-            .challenge_info
-            .ok_or_else(|| PluginServiceError::ConfigPreConditionError("ChallengeInfo not found".into()))?;
+    pub fn set_acme_challenge(&self, order: ServiceUserOrder) -> Result<(), PluginServiceError> {
+        let challenge_info = order.challenge_info.ok_or_else(|| {
+            PluginServiceError::ConfigPreConditionError("ChallengeInfo not found".into())
+        })?;
         let run_config = SetConfig::new(
             challenge_info.txt_record_value.clone(),
             order.domain.clone(),

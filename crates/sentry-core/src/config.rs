@@ -113,7 +113,6 @@ impl ConfigurationMap for ApplicationConfig {
 }
 
 impl ConfigBuilder for ApplicationConfigBuilder {
-
     fn base_url(mut self, value: String) -> Self {
         self.base_url = value;
         self

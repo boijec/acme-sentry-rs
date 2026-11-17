@@ -143,7 +143,8 @@ impl OrderService {
             .initiate_challenge(user, order)
             .await?;
 
-        self.plugin_service.set_acme_challenge(order)
+        self.plugin_service
+            .set_acme_challenge(order)
             .map_err(|e| OrderServiceError::InternalError(e.to_string()))?;
         Ok(())
     }

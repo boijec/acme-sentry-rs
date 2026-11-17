@@ -22,8 +22,8 @@ impl PluginTool {
             let p = entry.path().clone();
             let filename = p.file_name().and_then(|f| f.to_str()).unwrap_or("");
             if p.extension().and_then(|ext| ext.to_str()) == Some("so") {
-                let (name, compatibility) = PluginEngine::load_name_and_check_fingerprint(&p)
-                    .map_err(|e| e.to_string())?;
+                let (name, compatibility) =
+                    PluginEngine::load_name_and_check_fingerprint(&p).map_err(|e| e.to_string())?;
                 let default_ptr: String;
                 if let Some(def) = default.clone() {
                     if def == filename {
@@ -34,7 +34,10 @@ impl PluginTool {
                 } else {
                     default_ptr = "   ".into();
                 }
-                println!("\t{} Name: {}, Verification: {}\n", default_ptr, name, compatibility);
+                println!(
+                    "\t{} Name: {}, Verification: {}\n",
+                    default_ptr, name, compatibility
+                );
             }
         }
         Ok(())

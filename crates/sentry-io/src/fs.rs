@@ -39,18 +39,9 @@ pub trait FileSystemOperations {
     fn read_sub_directory(&self, sub_dir: &str) -> FileResult<Flatten<ReadDir>>;
     fn file_exists_adaptive(&self, dir: PathBuf, file_name: &str) -> bool;
     fn file_exists(&self, dir: PathBuf, file_name: &str) -> bool;
-    fn touch_file(
-        &self,
-        sub_dir: &str,
-        filename: &str,
-    ) -> FileResult<()>;
+    fn touch_file(&self, sub_dir: &str, filename: &str) -> FileResult<()>;
     fn copy(&self, from: PathBuf, to: &str) -> FileResult<()>;
-    fn write_to_file(
-        &self,
-        sub_dir: &str,
-        filename: &str,
-        data: &[u8],
-    ) -> FileResult<PathBuf>;
+    fn write_to_file(&self, sub_dir: &str, filename: &str, data: &[u8]) -> FileResult<PathBuf>;
     fn read_from_file(&self, sub_dir: &str, filename: &str) -> FileResult<Vec<u8>>;
     fn read_from_file_to_string(&self, sub_dir: &str, filename: &str) -> FileResult<String>;
 }
@@ -58,7 +49,7 @@ pub trait FileSystemOperations {
 pub enum FileSystemOrigin {
     CurrentDirectory,
     UserHomeDirectory,
-    OptionsDirectory
+    OptionsDirectory,
 }
 
 impl BasicUnixFileSystem {
@@ -73,12 +64,19 @@ impl BasicUnixFileSystem {
             base_dir: base_dir.to_path_buf(),
         })
     }
-    pub fn initialize<P: AsRef<Path>>(base_dir: P, origin_type: FileSystemOrigin) -> FileResult<Self> {
+    pub fn initialize<P: AsRef<Path>>(
+        base_dir: P,
+        origin_type: FileSystemOrigin,
+    ) -> FileResult<Self> {
         let base = match origin_type {
-            FileSystemOrigin::CurrentDirectory => env::current_dir()
-                .map_err(|err| FileSystemError::UnknownFileSystemError(err))?,
-            FileSystemOrigin::UserHomeDirectory => env::home_dir()
-                .ok_or_else(|| FileSystemError::UnableToLocateDirectoryEnvironment("user home directory not found".into()))?,
+            FileSystemOrigin::CurrentDirectory => {
+                env::current_dir().map_err(|err| FileSystemError::UnknownFileSystemError(err))?
+            }
+            FileSystemOrigin::UserHomeDirectory => env::home_dir().ok_or_else(|| {
+                FileSystemError::UnableToLocateDirectoryEnvironment(
+                    "user home directory not found".into(),
+                )
+            })?,
             FileSystemOrigin::OptionsDirectory => Self::OPT_BASE_DIR.into(),
         };
         let origin = base.join(base_dir.as_ref());
@@ -95,8 +93,9 @@ impl BasicUnixFileSystem {
         })
     }
     pub fn scan_for_home_folder(base_dir_name: &str) -> FileResult<String> {
-        let user_home = env::home_dir()
-            .ok_or_else(|| FileSystemError::UnableToLocateDirectoryEnvironment("Home dir".into()))?;
+        let user_home = env::home_dir().ok_or_else(|| {
+            FileSystemError::UnableToLocateDirectoryEnvironment("Home dir".into())
+        })?;
         let path_in_user_home = user_home.join(PathBuf::from(base_dir_name));
         let exists_in_user = fs::exists(&path_in_user_home)
             .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
@@ -112,8 +111,8 @@ impl BasicUnixFileSystem {
             return Ok(path_in_current_dir.into_string().unwrap());
         }
         let path_in_opt = PathBuf::from(Self::OPT_BASE_DIR).join(PathBuf::from(base_dir_name));
-        let exists_in_opt = fs::exists(&path_in_opt)
-            .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
+        let exists_in_opt =
+            fs::exists(&path_in_opt).map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
         if exists_in_opt {
             return Ok(path_in_opt.into_os_string().into_string().unwrap());
         }
@@ -125,8 +124,8 @@ impl BasicUnixFileSystem {
 impl FileSystemOperations for BasicUnixFileSystem {
     fn resolve_path(&self, path: &str) -> FileResult<PathBuf> {
         let source = PathBuf::from(path);
-        let canon = fs::canonicalize(&source)
-            .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
+        let canon =
+            fs::canonicalize(&source).map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
         debug!("Path resolved to: {:?}", canon);
         Ok(canon)
     }
@@ -146,8 +145,7 @@ impl FileSystemOperations for BasicUnixFileSystem {
     }
     fn read_sub_directory(&self, sub_dir: &str) -> FileResult<Flatten<ReadDir>> {
         let t = self.base_dir.join(sub_dir);
-        let s = read_dir(t)
-            .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
+        let s = read_dir(t).map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
         Ok(s.flatten())
     }
     fn file_exists_adaptive(&self, dir: PathBuf, file_name: &str) -> bool {
@@ -157,32 +155,22 @@ impl FileSystemOperations for BasicUnixFileSystem {
         self.base_dir.join(dir).join(file_name).exists()
     }
     #[instrument(skip(self, sub_dir, filename))]
-    fn touch_file(
-        &self,
-        sub_dir: &str,
-        filename: &str,
-    ) -> FileResult<()> {
+    fn touch_file(&self, sub_dir: &str, filename: &str) -> FileResult<()> {
         let dir = self.sub_dir(sub_dir);
         let file_path = dir.join(filename);
         debug!("Touching file: {}", file_path.display());
-        let _ = File::create_new(file_path)
-            .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
+        let _ =
+            File::create_new(file_path).map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
         Ok(())
     }
     #[instrument(skip(self, from, to))]
     fn copy(&self, from: PathBuf, to: &str) -> FileResult<()> {
         let base = self.base_dir.join(to);
-        fs::copy(&from, &base)
-            .map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
+        fs::copy(&from, &base).map_err(|e| FileSystemError::UnknownFileSystemError(e))?;
         Ok(())
     }
     #[instrument(skip(self, sub_dir, filename, data))]
-    fn write_to_file(
-        &self,
-        sub_dir: &str,
-        filename: &str,
-        data: &[u8],
-    ) -> FileResult<PathBuf> {
+    fn write_to_file(&self, sub_dir: &str, filename: &str, data: &[u8]) -> FileResult<PathBuf> {
         let dir = self.sub_dir(sub_dir);
         let file_path = dir.join(filename);
         debug!("Writing file: {}", file_path.display());

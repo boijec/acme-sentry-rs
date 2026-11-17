@@ -22,7 +22,9 @@ impl From<String> for PluginFeature {
     }
 }
 
-pub(crate) fn check_plugin_ready(fs: Arc<dyn FileSystemOperations + Send + Sync>) -> anyhow::Result<bool> {
+pub(crate) fn check_plugin_ready(
+    fs: Arc<dyn FileSystemOperations + Send + Sync>,
+) -> anyhow::Result<bool> {
     let plugin_tool = PluginTool::new(fs);
     let ready = plugin_tool
         .verify_mvp()
@@ -31,7 +33,9 @@ pub(crate) fn check_plugin_ready(fs: Arc<dyn FileSystemOperations + Send + Sync>
 }
 
 #[allow(unused)]
-pub(crate) fn get_default(fs: Arc<dyn FileSystemOperations + Send + Sync>) -> anyhow::Result<Option<String>> {
+pub(crate) fn get_default(
+    fs: Arc<dyn FileSystemOperations + Send + Sync>,
+) -> anyhow::Result<Option<String>> {
     let toml = toml_config::read_current_toml_config(fs)?;
     if let Some(_) = toml.acme_plugin {
         Ok(toml.acme_plugin)

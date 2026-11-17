@@ -1,5 +1,5 @@
-use thiserror::Error;
 use sentry_plugin_engine::error::PluginEngineError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum PluginServiceError {
