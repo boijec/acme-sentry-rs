@@ -75,8 +75,16 @@ async fn tree_start(
         }
         Operation::OneShot => {
             info!("Single shot mode enabled waiting for engine 'done' flag");
+
             let mut shutdown_handle = handle.clone();
-            shutdown_handle.wait_for_completion().await;
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    shutdown_handle.shutdown().await;
+                }
+                _ = shutdown_handle.wait_for_completion() => {
+                    shutdown_handle.shutdown().await;
+                }
+            }
             Ok(ExitCode::SUCCESS)
         }
         _ => Err(anyhow::anyhow!("Invalid operation mode for main")),

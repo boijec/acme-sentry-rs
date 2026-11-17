@@ -32,3 +32,9 @@ pub enum GenericJobError {
     #[error("{0}")]
     GenericError(String),
 }
+
+#[derive(Error, Debug)]
+pub enum InitializationError {
+    #[error("{0}")]
+    FileSystemError(#[from] FileSystemError),
+}

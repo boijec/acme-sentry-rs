@@ -1,3 +1,4 @@
+use sentry_io::fs::FileSystemError;
 use sentry_plugin_engine::error::PluginEngineError;
 use thiserror::Error;
 
@@ -9,4 +10,16 @@ pub enum PluginServiceError {
     EngineError(PluginEngineError),
     #[error("Precondition for plugin run failed :: {0}")]
     ConfigPreConditionError(String),
+}
+
+#[derive(Error, Debug)]
+pub enum PluginToolingError {
+    #[error("no default plugin found")]
+    NoDefaultFound,
+    #[error("could not resolve path to filename")]
+    PathResolveError,
+    #[error("file system error in tooling :: {0}")]
+    FileSystemError(#[from] FileSystemError),
+    #[error("error while calling engine in plugin tool :: {0}")]
+    EngineError(PluginEngineError),
 }

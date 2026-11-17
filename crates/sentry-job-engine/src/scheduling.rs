@@ -27,13 +27,11 @@ impl<'a> SchedulerHandle<'a> {
         debug!("Message submitted to scheduler");
         sub
     }
-    #[instrument(skip(self))]
     pub async fn shutdown(self) {
         debug!("Shutdown initiated");
         let rx = self.internal_shutdown().await;
         rx.await.expect("Scheduler didn't confirm shutdown");
     }
-    #[instrument(skip(self))]
     async fn internal_shutdown(&self) -> Receiver<()> {
         let (tx, rx) = oneshot::channel();
         self.sender

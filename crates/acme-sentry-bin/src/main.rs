@@ -24,13 +24,13 @@ fn splash() -> String {
     )
 }
 
-fn version() -> &'static str {
-    format!("Version: {}\n", crate_version!()).leak()
+fn version() -> String {
+    format!("Version: {}\n", crate_version!())
 }
 
-fn about() -> &'static str {
+fn about() -> String {
     let authors = format!("Created by:\n\t{}\n", crate_authors!());
-    format!("{}{}{}", splash(), version(), authors).leak()
+    format!("{}{}{}", splash(), version(), authors)
 }
 
 fn main() -> anyhow::Result<ExitCode> {
