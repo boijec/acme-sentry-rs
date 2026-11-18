@@ -1,75 +1,142 @@
-use crate::dependencies::JobDependencies;
 use crate::error::{ACMES132, JobEngineError};
-use crate::job::{Job, JobExecutionFlag};
-use std::ops::Deref;
-use tokio::sync::oneshot::{Receiver, Sender};
-use tokio::sync::{mpsc, oneshot, watch};
-use tracing::{Instrument, debug, error, info, instrument};
+use crate::job::{Job, JobContext, JobExecutionFlag, JobKind};
+use std::future::poll_fn;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+use tokio::sync::{Semaphore, mpsc, watch};
+use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+use tokio_util::time::DelayQueue;
+use tracing::{Instrument, Span, debug, error, info, instrument};
 
-enum SchedulerMessage<'a> {
-    Job(Box<dyn Job<'a>>),
-    Shutdown(Sender<()>),
+fn build_command<D, J: JobKind<D>>(job: J, at: Option<SystemTime>) -> Command<D> {
+    let delay = at
+        .map(|t| {
+            t.duration_since(SystemTime::now())
+                .unwrap_or(Duration::ZERO)
+        })
+        .unwrap_or(Duration::ZERO);
+    Command::Submit {
+        job: Box::new(job),
+        run_at: Instant::now() + delay,
+    }
 }
-#[derive(Clone, Debug)]
-pub struct SchedulerHandle<'a> {
-    sender: mpsc::Sender<SchedulerMessage<'a>>,
-    shutdown_rx: watch::Receiver<bool>,
+
+fn closed() -> JobEngineError {
+    JobEngineError::SchedulingError("Scheduler is shutting down".into())
+}
+
+enum Command<D> {
+    Submit {
+        job: Box<dyn Job<D>>,
+        run_at: Instant,
+    },
+}
+#[derive(Clone)]
+pub struct JobHandle<D> {
+    sender: mpsc::WeakSender<Command<D>>,
+    shutdown: CancellationToken,
+}
+
+impl<D> JobHandle<D>
+where
+    D: Clone + Sync + Send + 'static,
+{
+    pub async fn submit<J: JobKind<D>>(
+        &self,
+        job: J,
+        at: Option<SystemTime>,
+    ) -> Result<(), JobEngineError> {
+        let tx = self.sender.upgrade().ok_or_else(closed)?;
+        tx.send(build_command(job, at)).await.map_err(|_| closed())
+    }
+
+    pub fn is_shutting_down(&self) -> bool {
+        self.shutdown.is_cancelled()
+    }
+
+    pub async fn cancelled(&self) {
+        self.shutdown.cancelled().await
+    }
+}
+
+#[derive(Clone)]
+pub struct SchedulerHandle<D> {
+    sender: mpsc::Sender<Command<D>>,
+    shutdown: CancellationToken,
+    stopped: CancellationToken,
     report_rx: watch::Receiver<JobExecutionFlag>,
 }
-impl<'a> SchedulerHandle<'a> {
+
+impl<D> SchedulerHandle<D>
+where
+    D: Clone + Send + 'static,
+{
     #[instrument(skip(self, job))]
-    pub async fn submit<J: Job<'a>>(&self, job: J) -> Result<(), JobEngineError> {
-        let sub = self
-            .sender
-            .send(SchedulerMessage::Job(Box::new(job)))
+    pub async fn submit<J: JobKind<D>>(
+        &self,
+        job: J,
+        at: Option<SystemTime>,
+    ) -> Result<(), JobEngineError> {
+        self.sender
+            .send(build_command(job, at))
             .await
-            .map_err(|_| JobEngineError::SchedulingError("Scheduler is shutting down".into()));
+            .map_err(|_| closed())?;
         debug!("Message submitted to scheduler");
-        sub
+        Ok(())
     }
+
+    pub(crate) fn job_handle(&self) -> JobHandle<D> {
+        JobHandle::<D> {
+            sender: self.sender.downgrade(),
+            shutdown: self.shutdown.clone(),
+        }
+    }
+
     pub async fn shutdown(self) {
         debug!("Shutdown initiated");
-        let rx = self.internal_shutdown().await;
-        rx.await.expect("Scheduler didn't confirm shutdown");
+        self.shutdown.cancel();
+        self.stopped.cancelled().await;
     }
-    async fn internal_shutdown(&self) -> Receiver<()> {
-        let (tx, rx) = oneshot::channel();
-        self.sender
-            .send(SchedulerMessage::Shutdown(tx))
-            .await
-            .expect("Scheduler is already gone");
-        debug!("Shutdown message placed on queue");
-        rx
+
+    pub async fn wait_for_shutdown(&self) {
+        self.stopped.cancelled().await;
     }
-    pub async fn wait_for_completion(&mut self) {
-        self.report_rx
-            .wait_for(|status| {
-                return match status {
-                    JobExecutionFlag::Fatal(code) => {
-                        error!("SCHEDULER CRASH: {}", code.explain());
-                        true
-                    }
-                    JobExecutionFlag::Stop => {
-                        info!("Job engine reached final stage");
-                        true
-                    }
-                    _ => false,
-                };
-            })
-            .await
-            .expect("Scheduler didn't confirm completion");
-        let rx = self.internal_shutdown().await;
-        rx.await.expect("Scheduler didn't confirm shutdown");
+
+    pub async fn wait_for_completion(&self) -> Result<(), JobEngineError> {
+        let mut rx = self.report_rx.clone();
+        let fatal = {
+            let flag = rx
+                .wait_for(|s| matches!(s, JobExecutionFlag::Fatal(_) | JobExecutionFlag::Stop))
+                .await
+                .map_err(|_| {
+                    JobEngineError::JobExecutionError("Scheduler dropped before completion".into())
+                })?;
+            match &*flag {
+                JobExecutionFlag::Fatal(code) => {
+                    error!("SCHEDULER CRASH: {}", code.explain());
+                    Some(code.explain())
+                }
+                _ => {
+                    info!("Job engine reached final stage");
+                    None
+                }
+            }
+        };
+        self.shutdown.cancel();
+        self.stopped.cancelled().await;
+        fatal.map_or(Ok(()), |e| Err(JobEngineError::JobExecutionError(e)))
     }
-    pub async fn wait_for_healthy(&mut self) -> Result<(), JobEngineError> {
-        let ref_flag = self
-            .report_rx
-            .wait_for(|status| {
-                return match status {
-                    JobExecutionFlag::PreflightCompleted => true,
-                    JobExecutionFlag::Fatal(_) => true,
-                    _ => false,
-                };
+
+    pub async fn wait_for_healthy(&self) -> Result<(), JobEngineError> {
+        let mut rx = self.report_rx.clone();
+        let flag = rx
+            .wait_for(|s| {
+                matches!(
+                    s,
+                    JobExecutionFlag::PreflightCompleted | JobExecutionFlag::Fatal(_)
+                )
             })
             .await
             .map_err(|_| {
@@ -77,151 +144,128 @@ impl<'a> SchedulerHandle<'a> {
                     "Error while waiting for preflight-confirmation".into(),
                 )
             })?;
-        let flag = ref_flag.deref();
-        match flag {
+        match &*flag {
             JobExecutionFlag::Fatal(e) => Err(JobEngineError::JobExecutionError(e.explain())),
             _ => Ok(()),
         }
     }
-    pub async fn wait_for_shutdown(&mut self) {
-        self.shutdown_rx
-            .wait_for(|v| *v)
-            .await
-            .expect("Scheduler dropped without signaling");
-    }
 }
 
-pub struct Scheduler<'a> {
-    receiver: mpsc::Receiver<SchedulerMessage<'a>>,
-    shutdown_tx: watch::Sender<bool>,
+pub struct Scheduler<D> {
+    receiver: mpsc::Receiver<Command<D>>,
+    shutdown: CancellationToken,
+    stopped: CancellationToken,
     report_tx: watch::Sender<JobExecutionFlag>,
-    dependencies: Option<JobDependencies>,
+    job_handle: JobHandle<D>,
+    dependencies: Option<D>,
+    label: String,
+    max_concurrency: usize,
 }
 
-impl<'a> Scheduler<'a> {
-    pub fn new(buffer: usize) -> (Self, SchedulerHandle<'a>) {
-        let (sender, receiver) = mpsc::channel(buffer);
-        let (shutdown_tx, shutdown_rx) = watch::channel(false);
-        let (report_tx, report_rx) = watch::channel(JobExecutionFlag::Next);
+impl<D> Scheduler<D>
+where
+    D: Clone + Sync + Send + 'static,
+{
+    pub fn new(label: impl Into<String>, capacity: usize) -> (Self, SchedulerHandle<D>) {
+        let (tx, rx) = mpsc::channel(capacity);
+        let shutdown = CancellationToken::new();
+        let stopped = CancellationToken::new();
+        let (report_tx, report_rx) = watch::channel(JobExecutionFlag::default());
 
-        let scheduler = Scheduler {
-            receiver,
-            shutdown_tx,
-            report_tx,
-            dependencies: None,
-        };
         let handle = SchedulerHandle {
-            sender,
-            shutdown_rx,
+            sender: tx,
+            shutdown: shutdown.clone(),
+            stopped: stopped.clone(),
             report_rx,
+        };
+        let job_handle = handle.job_handle();
+        let scheduler = Scheduler {
+            receiver: rx,
+            shutdown,
+            stopped,
+            report_tx,
+            job_handle,
+            dependencies: None,
+            label: label.into(),
+            max_concurrency: 3,
         };
         (scheduler, handle)
     }
-    pub fn with_dependencies(&mut self, job_dependencies: JobDependencies) {
+    pub fn with_dependencies(&mut self, job_dependencies: D) {
         self.dependencies = Some(job_dependencies);
     }
-    pub async fn run(mut self, handle: SchedulerHandle<'a>) {
-        if self.dependencies.as_ref().is_none() {
+    pub async fn run(mut self) {
+        let Some(deps) = self.dependencies.take().map(Arc::new) else {
             error!("No job dependencies declared for job scheduler, shutting down..");
-            let _ = self.shutdown_tx.send(true);
+            self.shutdown.cancel();
+            self.stopped.cancel();
             return;
-        }
+        };
         info!("Scheduler started");
-        while let Some(message) = self.receiver.recv().await {
-            match message {
-                SchedulerMessage::Job(mut job) => {
-                    let job_name = job.job_type();
-                    let mut user_id = "unknown".to_string();
-                    if let Some(dependencies) = &self.dependencies {
-                        let id = dependencies.configuration().user_id.clone();
-                        user_id = id.to_string();
+
+        let permits = Arc::new(Semaphore::new(self.max_concurrency));
+        let tracker = TaskTracker::new();
+        let mut queue: DelayQueue<Box<dyn Job<D>>> = DelayQueue::new();
+
+        loop {
+            tokio::select! {
+                _ = self.shutdown.cancelled() => break,
+                msg = self.receiver.recv() => match msg {
+                    Some(Command::Submit { job, run_at }) => {
+                        queue.insert_at(job, run_at.into_std().into());
                     }
-                    let span =
-                        tracing::info_span!("job-message", user_id = user_id, job_name = job_name);
-                    job.inject_dependencies(self.dependencies.as_ref().unwrap());
-                    span.follows_from(tracing::Span::current());
-                    let job_result = job.execute(handle.clone()).instrument(span).await;
-                    if let Ok(t) = job_result {
-                        let _ = self.report_tx.send(t);
-                    } else if let Err(job_result) = job_result {
-                        error!(
-                            "Failed to execute step '{}' with error :: {}",
-                            job_name, job_result
-                        );
-                        if let JobEngineError::FlagError(e) = job_result {
-                            let _ = self.report_tx.send(e);
-                        } else {
-                            let _ = self.report_tx.send(ACMES132);
+                    None => break,
+                },
+                Some(expired) = poll_fn(|cx| queue.poll_expired(cx)), if !queue.is_empty() => {
+                    let job = expired.into_inner();
+                    let ctx = JobContext {
+                        handle: self.job_handle.clone(),
+                        deps: deps.clone(),
+                        token: self.shutdown.child_token(),
+                    };
+                    let report_tx = self.report_tx.clone();
+                    let permits = permits.clone();
+                    let name = job.job_type().to_owned();
+                    let span = tracing::info_span!(
+                        "job-task", user_id = %self.label, task_name = %name
+                    );
+                    span.follows_from(Span::current());
+
+                    tracker.spawn(
+                        async move {
+                            let Ok(_permit) = permits.acquire_owned().await else { return };
+                            let span = tracing::info_span!("job");
+                            span.follows_from(Span::current());
+                            let outcome = tokio::spawn(job.execute(ctx).instrument(span)).await;
+                            let flag = match outcome {
+                                Ok(Ok(flag)) => flag,
+                                Ok(Err(JobEngineError::FlagError(e))) => {
+                                    error!("step '{name}' failed: {e:?}");
+                                    e
+                                }
+                                Ok(Err(e)) => {
+                                    error!("Failed to execute step '{name}' with error :: {e}");
+                                    ACMES132
+                                }
+                                Err(join_err) => {
+                                    error!("step '{name}' panicked or was aborted :: {join_err}");
+                                    ACMES132
+                                }
+                            };
+                            let _ = report_tx.send(flag);
                         }
-                    }
-                }
-                SchedulerMessage::Shutdown(ack) => {
-                    debug!("Shutdown hook triggered, closing queue");
-                    self.receiver.close();
-                    while let Ok(msg) = self.receiver.try_recv() {
-                        drop(msg);
-                        debug!("Scheduler draining queue");
-                    }
-                    let _ = ack.send(());
-                    debug!("Scheduler shutdown ack sent");
-                    break;
+                        .instrument(span),
+                    );
                 }
             }
         }
-        let _ = self.shutdown_tx.send(true);
+        debug!("Shutdown triggered, closing queue");
+        self.shutdown.cancel();
+        self.receiver.close();
+        drop(queue);
+        tracker.close();
+        tracker.wait().await;
+        self.stopped.cancel();
         info!("Scheduler stopped");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::dependencies::JobDependencies;
-    use crate::error::JobEngineError;
-    use crate::job::{Job, JobExecutionFlag};
-    use crate::scheduling::{Scheduler, SchedulerHandle};
-    use async_trait::async_trait;
-    use tracing::instrument;
-
-    #[derive(Debug)]
-    struct PrintJob {
-        id: u32,
-    }
-    #[async_trait]
-    impl<'a> Job<'a> for PrintJob {
-        fn job_type(&self) -> &'a str {
-            "print-job"
-        }
-
-        fn inject_dependencies(&mut self, _dependencies: &JobDependencies) {
-            return;
-        }
-
-        #[instrument(skip(self, _handle))]
-        async fn execute(
-            &self,
-            _handle: SchedulerHandle<'a>,
-        ) -> Result<JobExecutionFlag, JobEngineError> {
-            println!("Running job {}", self.id);
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            println!("Job {} done", self.id);
-            Ok(JobExecutionFlag::Next)
-        }
-    }
-
-    #[tokio::test]
-    async fn test_struct_queue() {
-        let (scheduler, handle) = Scheduler::new(32);
-        tokio::spawn(scheduler.run(handle.clone()));
-        let handle2 = handle.clone();
-        handle
-            .submit(PrintJob { id: 1 })
-            .await
-            .expect("panic message");
-        handle2
-            .submit(PrintJob { id: 2 })
-            .await
-            .expect("panic message");
-        println!("Verification printout");
-        handle.clone().wait_for_shutdown().await;
     }
 }

@@ -1,5 +1,6 @@
 use actix_web::{HttpResponse, Responder, web};
 use sentry_core::config::{ApplicationConfig, ConfigurationMap};
+use sentry_job_engine::dependencies::JobDependencies;
 use sentry_job_engine::jobs::place_order::PlaceOrderJob;
 use sentry_job_engine::scheduling::SchedulerHandle;
 use serde::{Deserialize, Serialize};
@@ -14,14 +15,14 @@ pub struct NewOrderRequest {
 
 pub async fn post_new_order<'a>(
     req: web::Json<NewOrderRequest>,
-    handle: web::Data<SchedulerHandle<'a>>,
+    handle: web::Data<SchedulerHandle<JobDependencies>>,
     application_config: web::Data<Arc<ApplicationConfig>>,
 ) -> impl Responder {
-    info!("Received new order request: domain='{}'", req.domain);
+    info!("Received new order request: domain = '{}'", req.domain);
     let config = application_config.clone();
     let _user_id = config.get_user_id();
     match handle
-        .submit(PlaceOrderJob::instantiate(req.domain.clone()))
+        .submit(PlaceOrderJob::instantiate(req.domain.clone()), None)
         .await
     {
         Ok(_) => HttpResponse::Accepted().json(json!({

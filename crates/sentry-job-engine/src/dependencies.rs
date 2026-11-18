@@ -2,6 +2,7 @@ use sentry_core::config::ApplicationConfig;
 use sentry_core::services::Services;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct JobDependencies {
     configuration: Arc<ApplicationConfig>,
     services: Arc<Services>,

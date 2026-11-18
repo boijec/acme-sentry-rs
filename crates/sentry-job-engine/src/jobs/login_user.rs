@@ -1,17 +1,11 @@
 use crate::dependencies::JobDependencies;
-use crate::error::{ACMES133, JobEngineError};
-use crate::job::{Job, JobExecutionFlag};
-use crate::scheduling::SchedulerHandle;
+use crate::error::JobEngineError;
+use crate::job::{Job, JobContext, JobExecutionFlag};
 use async_trait::async_trait;
-use sentry_core::config::{ApplicationConfig, ConfigurationMap};
-use sentry_core::user::service::UserService;
-use std::sync::Arc;
+use sentry_core::config::ConfigurationMap;
 
 #[derive(Default)]
-pub struct LoginUserJob {
-    config: Option<Arc<ApplicationConfig>>,
-    user_service: Option<Arc<UserService>>,
-}
+pub struct LoginUserJob;
 
 impl LoginUserJob {
     pub fn instantiate() -> LoginUserJob {
@@ -20,40 +14,35 @@ impl LoginUserJob {
 }
 
 #[async_trait]
-impl<'a> Job<'a> for LoginUserJob {
-    fn job_type(&self) -> &'a str {
+impl Job<JobDependencies> for LoginUserJob {
+    fn job_type(&self) -> &str {
         "login-user-job"
     }
 
-    fn inject_dependencies(&mut self, dependencies: &JobDependencies) {
-        self.config = Some(dependencies.configuration());
-        self.user_service = Some(dependencies.services().user_service());
-    }
-
     async fn execute(
-        &self,
-        _handle: SchedulerHandle<'a>,
+        self: Box<Self>,
+        context: JobContext<JobDependencies>,
     ) -> Result<JobExecutionFlag, JobEngineError> {
-        let services = (&self.user_service, &self.config);
-        if let (Some(user_service), Some(config)) = services {
-            let user_id = config.get_user_id();
-            let user = user_service
-                .get_user(&user_id)
-                .await
-                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
-                .ok_or_else(|| {
-                    JobEngineError::JobExecutionError(
-                        "No user found matching configured user_id".into(),
-                    )
-                })?;
+        let (user_service, config) = (
+            context.deps.services().user_service(),
+            context.deps.configuration(),
+        );
+        let user_id = config.get_user_id();
+        let user = user_service
+            .get_user(&user_id)
+            .await
+            .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?
+            .ok_or_else(|| {
+                JobEngineError::JobExecutionError(
+                    "No user found matching configured user_id".into(),
+                )
+            })?;
 
-            user_service
-                .login(&user)
-                .await
-                .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
+        user_service
+            .login(&user)
+            .await
+            .map_err(|e| JobEngineError::JobExecutionError(e.to_string()))?;
 
-            return Ok(JobExecutionFlag::PreflightCompleted);
-        }
-        Err(JobEngineError::FlagError(ACMES133))
+        Ok(JobExecutionFlag::PreflightCompleted)
     }
 }

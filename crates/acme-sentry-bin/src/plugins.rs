@@ -66,12 +66,17 @@ pub(crate) fn list_or_install_plugin(
                 let name = plugin_tool
                     .install_plugin(&path)
                     .map_err(|e| anyhow!("failed to install plugin files: {}", e))?;
+                println!("Plugin `{}` installed", path);
                 let toml = toml_config::read_current_toml_config(fs.clone())?;
                 if let None = toml.acme_plugin {
                     let new = toml.with_default_plugin(name);
                     save_serialized_config(new, fs)
                         .map_err(|e| anyhow!("failed to save acme plugin files: {}", e))?;
+                    println!("No default plugin was found - added new plugin as default")
                 }
+                println!(
+                    "Use command `plugin ls` to list installed plugins or use `plugin --help` to see more options"
+                );
             }
             Ok(())
         }

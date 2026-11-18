@@ -5,6 +5,7 @@ use sentry_rfc8555::directory::operations::DirectoryOperations;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[derive(Default)]
 pub struct DirectoryService {
     configuration: Arc<ApplicationConfig>,
 

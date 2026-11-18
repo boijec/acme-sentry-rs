@@ -37,8 +37,6 @@ fn main() -> anyhow::Result<ExitCode> {
     let (mut matches, operation) =
         argument_man().map_err(|e| anyhow!("Argument error :: {}", e))?;
 
-    print!("{}\n", splash());
-
     let temp: Option<Level> = matches.remove_one("log-level");
     let level: Level = if let Some(l) = temp { l } else { Level::INFO };
 
@@ -47,7 +45,6 @@ fn main() -> anyhow::Result<ExitCode> {
         init_application(&mut matches).map_err(|e| anyhow!("Application init failed :: {}", e))?;
         return Ok(ExitCode::SUCCESS);
     }
-
     let base_dir_path =
         BasicUnixFileSystem::scan_for_home_folder(UNIVERSAL_BASE_DIR).map_err(|e| {
             anyhow!(
@@ -69,6 +66,7 @@ fn main() -> anyhow::Result<ExitCode> {
     let application_configuration = Arc::new(conf);
     match operation {
         Operation::OneShot | Operation::Watch => {
+            print!("{}\n", splash());
             let ready = plugins::check_plugin_ready(file_system.clone())
                 .map_err(|e| anyhow!("Error while checking plugin ready: {}", e))?;
             if ready {
