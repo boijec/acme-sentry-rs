@@ -22,7 +22,8 @@ pub async fn start_http_server(
             .app_data(scheduler_data.clone())
             .app_data(config.clone())
             .app_data(service_list.clone())
-            .route("/orders", web::post().to(orders::post_new_order))
+            .route("/order/new", web::post().to(orders::post_new_order))
+            .route("/orders", web::get().to(orders::get_all_orders))
     })
     .workers(2)
     .bind(bind_addr)
@@ -36,8 +37,9 @@ pub async fn start_http_server(
     let server_handle = server.handle();
     let server_span = info_span!("webserver");
     let srv_task = tokio::spawn(server.instrument(server_span));
-    info!("Order new certificate at: {}/order/new", bind_addr);
-    info!("Check open orders and status at: {}/orders/open", bind_addr);
+    info!("Server available at: {}", bind_addr);
+    info!("Order new certificate at: `/order/new`");
+    info!("Check open orders and status at: `/orders`");
     let h = handle.clone();
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
