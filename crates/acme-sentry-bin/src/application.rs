@@ -44,20 +44,20 @@ async fn tree_start(
         plugin_engine.clone(),
     ));
 
-    let (mut scheduler, handle) = Scheduler::new(32);
+    let (mut scheduler, handle) = Scheduler::new(application_config.get_user_id().as_str(), 32);
     scheduler.with_dependencies(JobDependencies::new(
         application_config.clone(),
         services.clone(),
     ));
     let scheduler_span = info_span!("scheduler");
     scheduler_span.follows_from(Span::current());
-    let _ = tokio::spawn(scheduler.run(handle.clone()).instrument(scheduler_span));
+    let _ = tokio::spawn(scheduler.run().instrument(scheduler_span));
 
-    let _ = preflight_start_sequence(&handle).await?;
-    let mut preflight_handler = handle.clone();
+    let _ = preflight_start_sequence(handle.clone()).await?;
+    let preflight_handler = handle.clone();
     let pre_flight_result = preflight_handler.wait_for_healthy().await;
     if let Ok(_) = pre_flight_result {
-        info!("Preflight steps ran successfully");
+        info!("Prelight completed");
     } else if let Err(error) = pre_flight_result {
         error!("Preflight steps raised error :: {}", error.to_string());
         handle.shutdown().await;
@@ -67,16 +67,16 @@ async fn tree_start(
 
     match op_mode {
         Operation::Watch => {
-            info!("Application mode has been enabled, monitoring input signals.");
+            info!("Watch mode enabled");
             let _ = start_http_server(application_config.clone(), handle.clone(), services.clone())
                 .await
                 .map_err(|err| anyhow!(err))?;
             Ok(ExitCode::SUCCESS)
         }
         Operation::OneShot => {
-            info!("Single shot mode enabled waiting for engine 'done' flag");
-
-            let mut shutdown_handle = handle.clone();
+            info!("Request mode enabled");
+            info!("Shutdown will be initiated after job stop flag has been raised");
+            let shutdown_handle = handle.clone();
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
                     shutdown_handle.shutdown().await;

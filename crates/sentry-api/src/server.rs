@@ -3,16 +3,14 @@ use crate::orders;
 use actix_web::{App, HttpServer, web};
 use sentry_core::config::ApplicationConfig;
 use sentry_core::services::Services;
+use sentry_job_engine::dependencies::JobDependencies;
 use sentry_job_engine::scheduling::SchedulerHandle;
 use std::sync::Arc;
 use tracing::{Instrument, info, info_span};
 
-// Tricking the borrow-checker by putting SchedulerHandle as static (it might as well be) but when we've gotten this far
-// the handle is going to live as long as the application is alive.
-// It's never dropped until we call shutdown, and we exit out of main.
 pub async fn start_http_server(
     application_config: Arc<ApplicationConfig>,
-    handle: SchedulerHandle<'static>,
+    handle: SchedulerHandle<JobDependencies>,
     services: Arc<Services>,
 ) -> Result<(), ServerError> {
     let bind_addr = "0.0.0.0:8080";
@@ -38,8 +36,9 @@ pub async fn start_http_server(
     let server_handle = server.handle();
     let server_span = info_span!("webserver");
     let srv_task = tokio::spawn(server.instrument(server_span));
-    info!("HTTP server listening on {}", bind_addr);
-    let mut h = handle.clone();
+    info!("Order new certificate at: {}/order/new", bind_addr);
+    info!("Check open orders and status at: {}/orders/open", bind_addr);
+    let h = handle.clone();
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             server_handle.stop(true).await;

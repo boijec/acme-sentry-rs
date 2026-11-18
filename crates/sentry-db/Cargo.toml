@@ -6,6 +6,9 @@ edition.workspace = true
 publish.workspace = true
 license.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
@@ -14,4 +17,4 @@ async-trait.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
-tempfile = "3.27.0"
+tempfile.workspace = true

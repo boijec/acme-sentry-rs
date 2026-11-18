@@ -6,10 +6,17 @@ edition.workspace = true
 publish.workspace = true
 license.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 sentry-core.workspace = true
 
 tracing.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 async-trait.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time", "test-util"] }

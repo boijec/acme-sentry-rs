@@ -1,8 +1,8 @@
 # ACME Sentry
 
-A.C.M.E 2.0 client using the openssl bindings crate.
-```
-Rustc version: rustc 1.99.0 (b940084d7 2026-09-28)
+A.C.M.E 2.0 client using the `openssl` bindings crate.
+```text
+Rustc version: rustc 1.100.0 (0ef1bc386 2026-11-09)
 ```
 ACME CA for Test: [Pebble](https://github.com/letsencrypt/pebble)
 

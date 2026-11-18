@@ -6,6 +6,9 @@ edition.workspace = true
 publish.workspace = true
 license.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 sentry-jose.workspace = true
 sentry-crypto.workspace = true

@@ -14,7 +14,7 @@ impl PluginTool {
     }
     pub fn list_plugins(&self, default: Option<String>) -> Result<(), PluginToolingError> {
         let entries = self.fs.read_sub_directory(PLUGIN_DIRECTORY)?;
-        println!("=== Installed Plugins ===");
+        println!("\n=== Installed Plugins ===");
         println!("(*) = Default\n");
         for entry in entries {
             let p = entry.path().clone();
