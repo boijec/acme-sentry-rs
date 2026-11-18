@@ -49,8 +49,10 @@ impl Order {
 
 #[async_trait]
 pub trait OrderRepo {
-    async fn create_order(&self, user_id: i64, domain: String) -> Result<Order, DatabaseError>;
     async fn get_by_id(&self, order_id: i64) -> Result<Option<Order>, DatabaseError>;
+    async fn get_all(&self) -> Result<Vec<Order>, DatabaseError>;
+
+    async fn create_order(&self, user_id: i64, domain: String) -> Result<Order, DatabaseError>;
     async fn get_pending_for_user(&self, user_id: i64) -> Result<Option<Order>, DatabaseError>;
     async fn update_order_urls(
         &self,
@@ -79,21 +81,6 @@ impl OrderRepository {
 
 #[async_trait]
 impl OrderRepo for OrderRepository {
-    async fn create_order(&self, user_id: i64, domain: String) -> Result<Order, DatabaseError> {
-        let order = sqlx::query_as::<_, Order>(
-            r#"
-                    INSERT INTO acme_orders (user_id, domain, status, created_at)
-                    VALUES ($1, $2, 'pending', $3) RETURNING *;
-                 "#,
-        )
-        .bind(user_id)
-        .bind(domain)
-        .bind(unix_now().as_str())
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
-        Ok(order)
-    }
 
     async fn get_by_id(&self, order_id: i64) -> Result<Option<Order>, DatabaseError> {
         let order = sqlx::query_as::<_, Order>(
@@ -105,6 +92,34 @@ impl OrderRepo for OrderRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
+        Ok(order)
+    }
+
+    async fn get_all(&self) -> Result<Vec<Order>, DatabaseError> {
+        let orders = sqlx::query_as::<_, Order>(
+            r#"
+                    SELECT * FROM acme_orders;
+                 "#,
+        )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
+        Ok(orders)
+    }
+
+    async fn create_order(&self, user_id: i64, domain: String) -> Result<Order, DatabaseError> {
+        let order = sqlx::query_as::<_, Order>(
+            r#"
+                    INSERT INTO acme_orders (user_id, domain, status, created_at)
+                    VALUES ($1, $2, 'pending', $3) RETURNING *;
+                 "#,
+        )
+            .bind(user_id)
+            .bind(domain)
+            .bind(unix_now().as_str())
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|err| DatabaseError::GenericDatabaseError(err.to_string()))?;
         Ok(order)
     }
 

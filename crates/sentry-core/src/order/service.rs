@@ -265,4 +265,19 @@ impl OrderService {
             Ok(DownloadStatus::ContinuePolling)
         }
     }
+
+    pub async fn get_all_orders(
+        &self,
+    ) -> Result<Vec<ServiceUserOrder>, OrderServiceError> {
+        let orders = self
+            .order_repo
+            .get_all()
+            .await
+            .map_err(|e| OrderServiceError::InternalError(e.to_string()))?;
+        let service_orders = orders
+            .into_iter()
+            .map(|order| self.build_service_user_order_from_order(&order))
+            .collect();
+        Ok(service_orders)
+    }
 }
